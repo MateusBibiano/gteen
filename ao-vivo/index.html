@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Solução da Equipe GTEeN · ao vivo</title>
+<style>
+/* Palco 16:9 fixo (1280x720) que escala para caber no slide.
+   Esquerda: câmera com pontos + botões. Direita: painel do professor como no dia a dia. */
+:root{
+  --bg:#04070d; --stage:#0a111d; --card:#111b2c; --card2:#162338; --line:#21314a; --ink:#e9f1fb; --sub:#9fb2cd; --muted:#687b98;
+  --azul:#3aa8f5; --azul2:#1469be; --ok:#3fd08a; --alerta:#f5c043; --laranja:#f08a3c; --urgente:#ff5a5f; --acolher:#f07ab4; --roxo:#a68bff;
+  --s-eng:#4a90f0; --s-att:#1aa58f; --s-ten:#d96f2c;
+  --f:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1.35 var(--f);overflow:hidden}
+#fit{position:fixed;inset:0;overflow:hidden}
+#palco{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center;background:var(--stage);display:grid;grid-template-rows:52px 1fr;overflow:hidden}
+.top{display:flex;align-items:center;gap:12px;padding:0 18px;background:linear-gradient(90deg,#0f2d52,#0a111d 75%);border-bottom:1px solid var(--line)}
+.top img{width:38px;height:38px;border-radius:9px}
+.top h1{font-size:18px;margin:0;font-weight:700}
+.top .sp{flex:1}
+.pill{font:600 12px var(--mono);padding:6px 10px;border-radius:99px;background:rgba(255,255,255,.08);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pill.live{background:rgba(255,90,95,.16);color:#ff9b9e;display:flex;gap:7px;align-items:center}
+.pill.live i{width:8px;height:8px;border-radius:50%;background:var(--urgente);animation:pisca 1.2s infinite}
+@keyframes pisca{50%{opacity:.25}}
+.auto{font:600 12px var(--f);border:1px solid var(--line);background:var(--card);color:var(--sub);border-radius:9px;padding:7px 11px;cursor:pointer}
+.auto[aria-pressed="true"]{background:var(--azul2);color:#fff;border-color:var(--azul2)}
+button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
+.meio{display:grid;grid-template-columns:812px 1fr;gap:14px;padding:12px 16px 14px;min-height:0}
+.esq{display:flex;flex-direction:column;gap:10px;min-height:0}
+.cam{position:relative;width:812px;height:457px;border-radius:14px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.cam canvas{width:100%;height:100%;display:block}
+.ctrl{display:grid;grid-template-columns:1fr;gap:5px}
+.ctrl .t{font:600 10.5px var(--mono);letter-spacing:.1em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.row{display:flex;gap:6px;flex-wrap:nowrap;margin-bottom:5px}
+.row button{font:600 13px var(--f);color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;flex:1 1 auto;transition:background .15s,border-color .15s,transform .08s}
+.row button:hover{background:var(--card2)}
+.row button:active{transform:scale(.96)}
+.row button[aria-pressed="true"]{background:#123a63;border-color:var(--azul)}
+.row button .e{font-size:16px;line-height:1}
+.row button i{width:9px;height:9px;border-radius:3px}
+
+/* painel */
+.panel{display:flex;flex-direction:column;gap:9px;min-height:0;min-width:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:13px;padding:10px 12px;min-width:0}
+.lbl{font:600 9.5px var(--mono);letter-spacing:.1em;color:var(--sub);text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.one{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd{display:flex;gap:11px;align-items:center;height:44px}
+.cd .sq{width:42px;height:42px;border-radius:12px;background:var(--ok);flex:none;transition:background .3s}
+.cd>div:last-child{min-width:0;flex:1}
+.cd .v{font-size:18px;font-weight:800;letter-spacing:.01em}
+.cd .s{font:11px var(--mono);color:var(--sub)}
+.bar{height:6px;border-radius:6px;background:#0a1322;overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:6px;background:var(--ok);transition:width .15s linear}
+.cdcard .bar{margin-top:9px}
+.minis{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.mini{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:7px 9px;height:50px;min-width:0;transition:border-color .3s}
+.mini .lbl{display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:var(--azul)}
+.mini .v{font-weight:700;font-size:13px;margin-top:4px}
+.mini.flash{border-color:var(--azul)}
+.probs{display:grid;gap:4px;margin-top:6px}
+.prob{display:grid;grid-template-columns:96px 1fr 34px;gap:8px;align-items:center;font:11px var(--mono);height:13px;white-space:nowrap}
+.prob span:last-child{text-align:right;color:var(--sub);font-variant-numeric:tabular-nums}
+.chartcard{flex:1;display:flex;flex-direction:column;gap:5px;min-height:0}
+.leg{display:flex;gap:10px;font-size:10.5px;color:var(--sub);align-items:center}
+.leg i{display:inline-block;width:12px;height:3px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.leg .sp{flex:1}
+canvas#chart{width:100%;flex:1;min-height:0;display:block}
+.evs{display:grid;gap:3px;font-size:11.5px;height:54px;overflow:hidden;align-content:start}
+.evs div{display:grid;grid-template-columns:40px 8px 1fr;gap:7px;align-items:center;white-space:nowrap;animation:entra .35s ease}
+@keyframes entra{from{opacity:0;transform:translateY(-4px)}}
+.evs time{font:10.5px var(--mono);color:var(--muted)}
+.evs i{width:7px;height:7px;border-radius:50%}
+.evs span{overflow:hidden;text-overflow:ellipsis}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="fit"><div id="palco">
+  <div class="top">
+    <img src="data:image/jpeg;base64,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" alt="Logo GTEeN">
+    <h1>Solução da Equipe GTEeN</h1>
+    <span class="pill">Aluno A01</span>
+    <div class="sp"></div>
+    <button class="auto" id="btnAuto" aria-pressed="false">▶ Demonstração automática</button>
+    <span class="pill live"><i></i><span id="relogio">00:00</span></span>
+  </div>
+  <div class="meio">
+    <div class="esq">
+      <div class="cam"><canvas id="cv" width="1280" height="720" aria-label="Imagem da câmera com os pontos detectados no rosto, nas mãos e no corpo"></canvas></div>
+      <div class="ctrl">
+        <span class="t">Emoção</span>
+        <div class="row" id="bEmo">
+          <button data-emo="calma" aria-pressed="true"><i style="background:#4cc38a"></i>Neutro</button>
+          <button data-emo="alegria"><i style="background:#f2b705"></i>Sorriso</button>
+          <button data-emo="surpresa"><i style="background:#38b6d8"></i>Surpresa</button>
+          <button data-emo="tristeza"><i style="background:#5b8def"></i>Tristeza</button>
+          <button data-emo="raiva"><i style="background:#e5484d"></i>Tensão</button>
+          <button data-emo="medo"><i style="background:#9b6ef3"></i>Medo</button>
+        </div>
+        <span class="t">Gestos e corpo</span>
+        <div class="row" id="bGes">
+          <button data-g="ABERTA"><span class="e">✋</span>Ajuda</button>
+          <button data-g="V"><span class="e">✌️</span>Pausa</button>
+          <button data-g="POLEGAR"><span class="e">👍</span>Estou bem</button>
+          <button data-g="ESCOLHER"><span class="e">☝️</span>Escolher</button>
+          <button data-g="BRACO"><span class="e">🙋</span>Braço erguido</button>
+          <button data-g="DOIS"><span class="e">🙌</span>Dois braços</button>
+          <button data-g="BAIXA"><span class="e">⬇️</span>Cabeça baixa</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="card cdcard">
+        <div class="cd"><div class="sq" id="cdSq"></div><div><div class="lbl">Conduta</div><div class="v one" id="cdV">MANTER</div><div class="s one" id="cdS">ESTÁVEL | contínuo</div></div></div>
+        <div class="bar"><i id="cdBar"></i></div>
+      </div>
+      <div class="minis">
+        <div class="mini" id="mEmo"><div class="lbl"><span class="dot" id="emoDot"></span>Emoção</div><div class="v one" id="emoV">CALMA</div></div>
+        <div class="mini" id="mPed"><div class="lbl"><span class="dot" style="background:#78d2f5"></span>Pedido</div><div class="v one" id="pedV">NENHUM</div></div>
+        <div class="mini" id="mPos"><div class="lbl"><span class="dot" style="background:#1469be"></span>Postura</div><div class="v one" id="posV">NEUTRA</div></div>
+        <div class="mini" id="mAtt"><div class="lbl"><span class="dot" style="background:var(--s-att)"></span>Atenção</div><div class="v one" id="attV">OLHANDO</div></div>
+        <div class="mini" id="mTen"><div class="lbl"><span class="dot" style="background:var(--s-ten)"></span>Tensão</div><div class="v one" id="tenV">5%</div></div>
+        <div class="mini" id="mBlk"><div class="lbl"><span class="dot" style="background:var(--muted)"></span>Piscadas</div><div class="v one" id="blkV">16/min</div></div>
+      </div>
+      <div class="card">
+        <div class="lbl">Probabilidades · modelo do aluno</div>
+        <div class="probs" id="probs"></div>
+      </div>
+      <div class="card chartcard">
+        <div class="leg"><span><i style="background:var(--s-eng)"></i>Engajamento</span><span><i style="background:var(--s-att)"></i>Atenção</span><span><i style="background:var(--s-ten)"></i>Tensão</span><span class="sp"></span><span style="font-family:var(--mono)">últimos 60 s</span></div>
+        <canvas id="chart"></canvas>
+        <div class="evs" id="evs"></div>
+      </div>
+    </aside>
+  </div>
+</div></div>
+
+<script>
+// ---------------- escala ----------------
+const palco = document.getElementById("palco");
+function ajustar(){ const s = Math.min(innerWidth/1280, innerHeight/720); palco.style.transform = `translate(-50%,-50%) scale(${s})`; }
+addEventListener("resize", ajustar); ajustar();
+const $ = id => document.getElementById(id);
+const lerp = (a,b,t) => a + (b-a)*t;
+const clamp01 = v => Math.max(0, Math.min(1, v));
+
+// ---------------- constantes do sistema ----------------
+const CLASSES = ["alegria","calma","medo","raiva","surpresa","tristeza"];
+const NOME = {alegria:"Engajado", calma:"Calma", medo:"Insegurança", raiva:"Tensão", surpresa:"Surpresa", tristeza:"Baixa energia"};
+const NOME_P = {alegria:"ENGAJADO", calma:"CALMA", medo:"INSEGURANÇA", raiva:"TENSÃO", surpresa:"SURPRESA", tristeza:"BAIXA ENERGIA"};
+const COR = {alegria:"#f2b705", calma:"#4cc38a", medo:"#9b6ef3", raiva:"#e5484d", surpresa:"#38b6d8", tristeza:"#5b8def"};
+const PROTO = {
+  calma:{s:0,o:0,b:0,a:0,e:1}, alegria:{s:1,o:0.3,b:0.15,a:0,e:0.75}, surpresa:{s:0,o:0.95,b:1,a:0.1,e:1.35},
+  tristeza:{s:-0.85,o:0,b:0.25,a:0.9,e:0.8}, raiva:{s:-0.35,o:0.05,b:-0.8,a:-1,e:0.7}, medo:{s:-0.4,o:0.45,b:0.75,a:0.75,e:1.35},
+};
+const OPCOES = ["ÁGUA","BANHEIRO","SILÊNCIO","AJUDA"];
+$("probs").innerHTML = CLASSES.map(c => `<div class="prob"><span>${NOME[c]}</span><div class="bar"><i id="pb_${c}" style="background:${COR[c]}"></i></div><span id="pv_${c}">0%</span></div>`).join("");
+
+// ---------------- estado ----------------
+const F = {...PROTO.calma, h:0};             // rosto (animado)
+let alvoF = {...PROTO.calma, h:0}, emoBtn = "calma";
+let gesto = null, gestoAte = 0, gestoInicio = 0;   // gesto ativo pelos botões
+const T0 = performance.now()/1000;
+const tS = () => performance.now()/1000 - T0;
+
+// ---------------- esqueleto (coordenadas da câmera 1280x720) ----------------
+const W = 1280, H = 720, CX = 640;
+const POSE = {}; // pontos animados
+function pt(x,y){ return {x, y}; }
+const BASE = {
+  ombroE: pt(492,486), ombroD: pt(788,486),
+  cotoE: pt(452,640), cotoD: pt(828,640),
+  punhoE: pt(470,770), punhoD: pt(810,770),
+};
+// alvos de braço por gesto (lado direito da tela = mão que o aluno levanta)
+const BRACOS = {
+  null:     {cotoD:pt(828,640), punhoD:pt(810,770), cotoE:pt(452,640), punhoE:pt(470,770)},
+  ABERTA:   {cotoD:pt(900,470), punhoD:pt(905,300), cotoE:pt(452,640), punhoE:pt(470,770)},
+  V:        {cotoD:pt(900,470), punhoD:pt(905,300), cotoE:pt(452,640), punhoE:pt(470,770)},
+  POLEGAR:  {cotoD:pt(910,520), punhoD:pt(890,380), cotoE:pt(452,640), punhoE:pt(470,770)},
+  ESCOLHER: {cotoD:pt(910,560), punhoD:pt(820,600), cotoE:pt(452,640), punhoE:pt(470,770)},
+  BRACO:    {cotoD:pt(860,320), punhoD:pt(880,150), cotoE:pt(452,640), punhoE:pt(470,770)},
+  DOIS:     {cotoD:pt(860,320), punhoD:pt(880,150), cotoE:pt(420,320), punhoE:pt(400,150)},
+  BAIXA:    {cotoD:pt(828,640), punhoD:pt(810,770), cotoE:pt(452,640), punhoE:pt(470,770)},
+};
+const ARM = {cotoD:pt(828,640), punhoD:pt(810,770), cotoE:pt(452,640), punhoE:pt(470,770)};
+const DEDOS_POR_GESTO = {ABERTA:[1,1,1,1,1], V:[0,1,1,0,0], POLEGAR:[1,0,0,0,0], ESCOLHER:[0,1,0,0,0], BRACO:[1,1,1,1,1], DOIS:[1,1,1,1,1]};
+const dedosD = [0,0,0,0,0], dedosE = [0,0,0,0,0];
+let maoVisD = 0, maoVisE = 0, alvoEscolha = -1, escolhaX = 0;
+
+// ---------------- mão: 21 pontos no estilo do MediaPipe ----------------
+function pontosMao(punho, dir, dedos, esq){
+  // dir: vetor unitário do antebraço (para onde os dedos apontam); perp para o lado
+  const s = esq ? -1 : 1;
+  const px = -dir.y*s, py = dir.x*s;
+  const P = (u,v) => pt(punho.x + dir.x*u + px*v, punho.y + dir.y*u + py*v);
+  const out = [P(0,0)];
+  // polegar
+  const tUp = dedos[0];
+  out.push(P(14,-18), P(26 + tUp*4, -34 - tUp*6), tUp ? P(40,-48) : P(34,-24), tUp ? P(54,-60) : P(40,-14));
+  const bases = [[-17,62],[-5,66],[7,63],[18,57]];   // v, u da base dos dedos
+  const comp = [[26,18,15],[29,20,16],[26,18,15],[20,14,12]];
+  bases.forEach(([v,u],i) => {
+    const up = dedos[i+1], c = comp[i];
+    out.push(P(u, v));
+    if (up){ out.push(P(u+c[0], v*1.08), P(u+c[0]+c[1], v*1.14), P(u+c[0]+c[1]+c[2], v*1.18)); }
+    else   { out.push(P(u+14, v*1.02), P(u+4, v*0.98), P(u-6, v*0.95)); }
+  });
+  return out;
+}
+const CONEX_MAO = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+
+// ---------------- rosto: malha de pontos ----------------
+function pontosRosto(f, cx, cy, t){
+  const rx = 92, ry = 116*(1 - f.h*0.12), yaw = Math.sin(t*0.6)*0.03, rol = Math.sin(t*0.45)*0.025;
+  const pts = {mesh:[], contorno:[], olhoE:[], olhoD:[], sobE:[], sobD:[], nariz:[], labioExt:[], labioInt:[], iris:[]};
+  const M = (x,y) => { const X = x + yaw*(1 - x*x)*0.6, Y = y + f.h*0.1; const xr = X*Math.cos(rol) - Y*Math.sin(rol), yr = X*Math.sin(rol) + Y*Math.cos(rol); return pt(cx + xr*rx, cy + yr*ry); };
+  for (let i=0;i<40;i++){ const a = i/40*Math.PI*2; pts.contorno.push(M(Math.cos(a)*0.98, Math.sin(a)*0.98)); }
+  // malha interna (dá a aparência de face mesh)
+  for (const [r,n] of [[0.86,34],[0.72,28],[0.56,22],[0.38,14]]) for (let i=0;i<n;i++){ const a = i/n*Math.PI*2 + r; const x = Math.cos(a)*r, y = Math.sin(a)*r*1.02; if (Math.abs(y-0.3)<0.12 && Math.abs(x)<0.3) continue; if (Math.abs(y+0.12)<0.09 && Math.abs(Math.abs(x)-0.38)<0.2) continue; pts.mesh.push(M(x,y)); }
+  const piscada = (t % 3.7) < 0.12 ? 0.1 : 1, eo = 0.075*f.e*piscada;
+  for (const [lado, arr] of [[-1, pts.olhoE],[1, pts.olhoD]]){
+    for (let i=0;i<14;i++){ const a = i/14*Math.PI*2; arr.push(M(lado*0.38 + Math.cos(a)*0.17, -0.12 + Math.sin(a)*eo)); }
+    pts.iris.push(M(lado*0.38, -0.12 + f.h*0.03));
+  }
+  for (const [lado, arr] of [[-1, pts.sobE],[1, pts.sobD]]) for (let i=0;i<6;i++){ const u = i/5; const x = lado*(0.14 + u*0.38); const y = -0.36 - f.b*0.09 - (1-u)*f.a*0.08 + u*f.a*0.03 + (f.a<0 ? (1-u)*(-f.a)*0.06 : 0) - Math.sin(u*Math.PI)*0.04; arr.push(M(x,y)); }
+  for (let i=0;i<6;i++) pts.nariz.push(M(0, -0.18 + i*0.07));
+  pts.nariz.push(M(-0.1,0.2), M(0.1,0.2));
+  const larg = 0.33 + f.s*0.06 + f.o*0.03, cyM = 0.48, canto = -f.s*0.11, topo = -0.02 - f.o*0.03, base = 0.04 + f.o*0.32 + Math.max(0,f.s)*0.08;
+  for (let i=0;i<=10;i++){ const u = i/10, x = -larg + 2*larg*u, k = Math.sin(u*Math.PI); pts.labioExt.push(M(x, cyM + canto*(1-k) + topo*k - 0.03*k)); }
+  for (let i=9;i>=1;i--){ const u = i/10, x = -larg + 2*larg*u, k = Math.sin(u*Math.PI); pts.labioExt.push(M(x, cyM + canto*(1-k) + base*k + 0.03*k)); }
+  for (let i=0;i<=8;i++){ const u = i/8, x = -larg*0.8 + 1.6*larg*u, k = Math.sin(u*Math.PI); pts.labioInt.push(M(x, cyM + canto*(1-k)*0.9 + topo*k)); }
+  for (let i=7;i>=1;i--){ const u = i/8, x = -larg*0.8 + 1.6*larg*u, k = Math.sin(u*Math.PI); pts.labioInt.push(M(x, cyM + canto*(1-k)*0.9 + base*k*0.85)); }
+  return pts;
+}
+
+// ---------------- desenho da câmera ----------------
+const cv = $("cv"), ctx = cv.getContext("2d");
+const ruido = document.createElement("canvas"); ruido.width = 320; ruido.height = 180;
+(() => { const c = ruido.getContext("2d"), d = c.createImageData(320,180); for (let i=0;i<d.data.length;i+=4){ const v = Math.random()*30; d.data[i]=v; d.data[i+1]=v; d.data[i+2]=v+6; d.data[i+3]=40; } c.putImageData(d,0,0); })();
+function linha(pts, fechar, cor, w){ ctx.strokeStyle = cor; ctx.lineWidth = w; ctx.beginPath(); pts.forEach((p,i) => i ? ctx.lineTo(p.x,p.y) : ctx.moveTo(p.x,p.y)); if (fechar) ctx.closePath(); ctx.stroke(); }
+function pontos(pts, cor, r){ ctx.fillStyle = cor; ctx.beginPath(); for (const p of pts){ ctx.moveTo(p.x+r,p.y); ctx.arc(p.x,p.y,r,0,Math.PI*2); } ctx.fill(); }
+function rr(x,y,w,h,r,cor){ ctx.fillStyle = cor; ctx.beginPath(); ctx.roundRect(x,y,w,h,r); ctx.fill(); }
+function txt(t,x,y,size,cor,peso=700,al="left"){ ctx.fillStyle = cor; ctx.font = `${peso} ${size}px "Segoe UI",system-ui,sans-serif`; ctx.textAlign = al; ctx.fillText(t,x,y); ctx.textAlign = "left"; }
+
+let ultimoFrame = {};
+function desenharCamera(t, info){
+  // fundo de "vídeo"
+  const g = ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,"#1b2433"); g.addColorStop(1,"#0d131d");
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = "#222c3b"; ctx.fillRect(0,430,W,6);           // parede / quadro ao fundo
+  rr(90,90,260,170,8,"#1f2a3a"); rr(980,70,200,260,8,"#1c2635");
+  const resp = Math.sin(t*1.6)*3;
+  const cabX = CX + Math.sin(t*0.5)*6, cabY = 268 + F.h*58 + resp*0.5;
+  // silhueta (pessoa)
+  ctx.fillStyle = "#2a3446";
+  ctx.beginPath(); ctx.moveTo(BASE.ombroE.x-40, H); ctx.quadraticCurveTo(BASE.ombroE.x-30, BASE.ombroE.y+resp-20, CX, BASE.ombroE.y-34+resp); ctx.quadraticCurveTo(BASE.ombroD.x+30, BASE.ombroD.y+resp-20, BASE.ombroD.x+40, H); ctx.fill();
+  ctx.fillStyle = "#313c50"; ctx.beginPath(); ctx.ellipse(cabX, cabY, 98, 124*(1-F.h*0.12), 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = "#2a3446"; ctx.fillRect(CX-34, cabY+100, 68, 90);
+  ctx.strokeStyle = "#2c374a"; ctx.lineCap = "round"; ctx.lineWidth = 46;
+  for (const [o,c,p] of [[BASE.ombroD, ARM.cotoD, ARM.punhoD],[BASE.ombroE, ARM.cotoE, ARM.punhoE]]){ ctx.beginPath(); ctx.moveTo(o.x,o.y+resp); ctx.lineTo(c.x,c.y); ctx.lineTo(p.x,p.y); ctx.stroke(); }
+  ctx.drawImage(ruido, (t*37)%40 - 40, (t*23)%30 - 30, W+80, H+60);
+  if (info.conduta === "ABRIR OPÇÕES"){
+    rr(14, H-250, W-28, 192, 26, "rgba(255,255,255,.88)");
+    txt("APONTE UMA OPÇÃO", 36, H-214, 22, "#243247", 700);
+    const lb = (W-60)/4;
+    OPCOES.forEach((op,i) => {
+      const x = 30 + i*lb, sel = info.escolha === op;
+      rr(x, H-196, lb-14, 120, 18, sel ? "#4cc38a" : "#d2eeff");
+      txt(op, x + (lb-14)/2, H-124, 26, "#243247", 800, "center");
+    });
+  }
+
+  // ----- pontos do corpo (pose) -----
+  const oE = pt(BASE.ombroE.x, BASE.ombroE.y+resp), oD = pt(BASE.ombroD.x, BASE.ombroD.y+resp);
+  const qE = pt(540, 800), qD = pt(740, 800);
+  ctx.lineCap = "round";
+  linha([oE,oD],false,"#1469be",5); linha([oE,ARM.cotoE,ARM.punhoE],false,"#1469be",5); linha([oD,ARM.cotoD,ARM.punhoD],false,"#1469be",5);
+  linha([oE,qE],false,"#1469be",5); linha([oD,qD],false,"#1469be",5);
+  pontos([oE,oD,ARM.cotoE,ARM.cotoD,ARM.punhoE,ARM.punhoD], "#78d2f5", 8);
+  pontos([pt(cabX-70,cabY-30), pt(cabX+70,cabY-30), pt(cabX,cabY+18)], "#78d2f5", 6);
+
+  // ----- rosto -----
+  const r = pontosRosto(F, cabX, cabY, t);
+  pontos(r.mesh, "rgba(0,255,110,.55)", 2.1);
+  const verde = "rgba(0,255,110,.85)";
+  linha(r.contorno,true,"rgba(0,255,110,.45)",1.6); linha(r.olhoE,true,verde,1.6); linha(r.olhoD,true,verde,1.6);
+  linha(r.sobE,false,verde,1.8); linha(r.sobD,false,verde,1.8); linha(r.labioExt,true,verde,1.8); linha(r.labioInt,true,"rgba(0,255,110,.6)",1.4); linha(r.nariz.slice(0,6),false,"rgba(0,255,110,.6)",1.4);
+  pontos([...r.contorno,...r.olhoE,...r.olhoD,...r.sobE,...r.sobD,...r.nariz,...r.labioExt,...r.labioInt], "#00ff6e", 2.6);
+  pontos(r.iris, "#ffffff", 4);
+
+  // ----- mãos -----
+  const desenharMao = (punho, coto, dedos, vis, esq) => {
+    if (vis < 0.35) return null;
+    let d = {x: punho.x - coto.x, y: punho.y - coto.y}; const n = Math.hypot(d.x,d.y) || 1; d = {x:d.x/n, y:d.y/n};
+    const P = pontosMao(punho, d, dedos.map(v => v > 0.5 ? 1 : 0), esq);
+    ctx.globalAlpha = Math.min(1, (vis-0.35)/0.4);
+    ctx.strokeStyle = "#3c78ff"; ctx.lineWidth = 3;
+    ctx.beginPath(); for (const [a,b] of CONEX_MAO){ ctx.moveTo(P[a].x,P[a].y); ctx.lineTo(P[b].x,P[b].y); } ctx.stroke();
+    pontos(P, "#6aa0ff", 5.5); pontos([P[0]], "#ffffff", 4);
+    ctx.globalAlpha = 1;
+    return P;
+  };
+  const PD = desenharMao(ARM.punhoD, ARM.cotoD, dedosD, maoVisD, false);
+  desenharMao(ARM.punhoE, ARM.cotoE, dedosE, maoVisE, true);
+  if (PD && dedosD[1] > 0.5 && maoVisD > 0.8 && infoAtual.conduta !== "ABRIR OPÇÕES"){ ctx.fillStyle = "#ffff00"; ctx.beginPath(); ctx.arc(PD[8].x, PD[8].y, 9, 0, Math.PI*2); ctx.fill(); }
+  ultimoFrame.dedoIndicador = PD && dedosD[1] > 0.5 ? PD[8] : null;
+
+  // ----- sobreposições do sistema -----
+  if (["OFERECER AJUDA","OFERECER PAUSA"].includes(info.conduta)){
+    const aj = info.conduta === "OFERECER AJUDA";
+    rr(16,16,W-32,64,18, aj ? "#e5403f" : "#ee7d2b"); txt(aj ? "ATENÇÃO: AJUDA" : "ATENÇÃO: PAUSA", 40, 60, 32, "#fff", 800);
+  }
+  if (info.conduta === "ABRIR OPÇÕES"){
+    if (ultimoFrame.dedoIndicador){ const p = ultimoFrame.dedoIndicador; ctx.fillStyle = "#ffff00"; ctx.beginPath(); ctx.arc(p.x,p.y,12,0,Math.PI*2); ctx.fill(); }
+  }
+  // chips de status
+  const chips = [`${fps} fps`, "rosto detectado", maoVisD > 0.5 || maoVisE > 0.5 ? "mão detectada" : "sem mão", "luz ok", "modelo do aluno"];
+  let x = 18; ctx.font = `700 19px ui-monospace,Menlo,Consolas,monospace`;
+  for (const c of chips){ const w = ctx.measureText(c).width + 26; rr(x, H-44, w, 30, 15, "rgba(8,14,24,.78)"); ctx.fillStyle = "#dfe9f7"; ctx.fillText(c, x+13, H-23); x += w + 8; }
+  // REC
+  if (!["OFERECER AJUDA","OFERECER PAUSA"].includes(info.conduta)){
+    ctx.fillStyle = (t%1.2)<0.7 ? "#ff5a5f" : "rgba(255,90,95,.3)"; ctx.beginPath(); ctx.arc(34,34,9,0,Math.PI*2); ctx.fill();
+    ctx.font = `700 20px ui-monospace,Menlo,Consolas,monospace`; ctx.fillStyle = "#ffb3b5"; ctx.fillText("AO VIVO · 478 + 21 + 33 pontos", 52, 41);
+  }
+}
+
+// ---------------- lógica (mesma regra do sistema real, simplificada) ----------------
+const LIM = {ABERTA:0.5, V:0.8, ESCOLHER:0.5, BAIXA:3, EMO:4, COMB:2};
+const cont = {ABERTA:0, V:0, ESCOLHER:0, BAIXA:0, EMO:0, COMB:0};
+const est = {cand:"calma", desde:0, conf:"calma", ult:-9};
+let condutaAtual = "MANTER", infoAtual = {conduta:"MANTER", escolha:""}, cooldownAte = 0;
+const PRIOR = {"OFERECER AJUDA":7,"OFERECER PAUSA":6,"ABRIR OPÇÕES":5,"ACOLHER":4,"VERIFICAR CANSAÇO":3,"OBSERVAR":2,"REFORÇAR":1,"MANTER":0};
+function probs(f){
+  const d = CLASSES.map(c => { const q = PROTO[c]; return (f.s-q.s)**2 + (f.o-q.o)**2 + (f.b-q.b)**2 + (f.a-q.a)**2 + (f.e-q.e)**2 + (Math.random()-0.5)*0.05; });
+  const ex = d.map(v => Math.exp(-v/0.4)), s = ex.reduce((a,b)=>a+b,0); return ex.map(v => v/s);
+}
+function conduta(g, baixa, emo){
+  if (cont.ABERTA >= LIM.ABERTA) return {conduta:"OFERECER AJUDA", s:"INTERVIR | imediato", cor:"#ff5a5f", ch:"ABERTA"};
+  if (cont.V >= LIM.V) return {conduta:"OFERECER PAUSA", s:"INTERVIR | imediato", cor:"#f08a3c", ch:"V"};
+  if (cont.ESCOLHER >= LIM.ESCOLHER) return {conduta:"ABRIR OPÇÕES", s:"APOIAR | agora", cor:"#f5c043", ch:"ESCOLHER"};
+  if (cont.COMB >= LIM.COMB) return {conduta:"ACOLHER", s:"ACOLHER | breve", cor:"#f07ab4", ch:"COMB"};
+  if (cont.BAIXA >= LIM.BAIXA) return {conduta:"VERIFICAR CANSAÇO", s:"OBSERVAR | acompanhar", cor:"#5b8def", ch:"BAIXA"};
+  if (cont.EMO >= LIM.EMO) return {conduta:"OBSERVAR", s:"OBSERVAR | sem pressa", cor:"#a68bff", ch:"EMO"};
+  if (g === "POLEGAR") return {conduta:"MANTER", s:"ESTÁVEL | aluno sinalizou bem", cor:"#3fd08a", ch:null};
+  if (emo === "alegria" && !baixa) return {conduta:"REFORÇAR", s:"ESTÁVEL | participação positiva", cor:"#3fd08a", ch:null};
+  return {conduta:"MANTER", s:"ESTÁVEL | contínuo", cor:"#3fd08a", ch:null};
+}
+const EV = {"OFERECER AJUDA":["Pedido de ajuda","#ff5a5f"],"OFERECER PAUSA":["Pedido de pausa","#f08a3c"],"ACOLHER":["Sinal combinado: acolher","#f07ab4"],"VERIFICAR CANSAÇO":["Cabeça baixa prolongada","#5b8def"],"OBSERVAR":["Emoção de atenção sustentada","#a68bff"]};
+const eventos = [];
+const mmss = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+function evento(txt, cor){
+  eventos.unshift({t:tS(), txt, cor}); if (eventos.length > 30) eventos.pop();
+  $("evs").innerHTML = eventos.slice(0,3).map(e => `<div><time>${mmss(e.t)}</time><i style="background:${e.cor}"></i><span>${e.txt}</span></div>`).join("");
+}
+function flash(id){ const el = $(id); el.classList.add("flash"); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove("flash"), 600); }
+const setT = (id, v) => { const el = $(id); if (el.textContent !== v){ el.textContent = v; return true; } return false; };
+
+// série para o gráfico
+const serie = []; let acc = {n:0, eng:0, att:0, ten:0, emo:{}}, ultAmostra = 0;
+let fps = 30, fpsN = 0, fpsT = 0, ultEsc = "", escDesde = 0, escReg = false, gAnterior = null;
+
+let tAnt = performance.now();
+function loop(now){
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.1, (now - tAnt)/1000); tAnt = now;
+  const t = tS();
+  fpsN++; if (t - fpsT > 1){ fps = Math.round(fpsN/(t-fpsT)); if (fps > 31) fps = 30; fpsT = t; fpsN = 0; }
+  if (auto) passoAuto(t);
+  if (gesto && t > gestoAte){ gesto = null; marcarGesto(); }
+
+  // rosto
+  const k = 1 - Math.pow(0.002, dt);
+  alvoF.h = gesto === "BAIXA" ? 1 : 0;
+  for (const key of ["s","o","b","a","e","h"]) F[key] += (alvoF[key] - F[key]) * k;
+
+  // braços
+  const alvoB = BRACOS[gesto] || BRACOS.null;
+  let alvoPD = alvoB.punhoD;
+  if (gesto === "ESCOLHER" && infoAtual.conduta === "ABRIR OPÇÕES"){
+    // depois que as opções aparecem, o dedo desce até "ÁGUA"
+    alvoPD = pt(840, 480);
+  }
+  const ka = 1 - Math.pow(0.004, dt);
+  for (const key of ["cotoD","cotoE","punhoE"]) { ARM[key].x = lerp(ARM[key].x, alvoB[key].x, ka); ARM[key].y = lerp(ARM[key].y, alvoB[key].y, ka); }
+  ARM.punhoD.x = lerp(ARM.punhoD.x, alvoPD.x, ka); ARM.punhoD.y = lerp(ARM.punhoD.y, alvoPD.y, ka);
+  if (gesto === "ESCOLHER" && infoAtual.conduta === "ABRIR OPÇÕES"){ ARM.cotoD.x = lerp(ARM.cotoD.x, 950, ka); ARM.cotoD.y = lerp(ARM.cotoD.y, 360, ka); }
+  const dAlvo = DEDOS_POR_GESTO[gesto] || [0,0,0,0,0];
+  for (let i=0;i<5;i++){ dedosD[i] += ((dAlvo[i]) - dedosD[i]) * Math.min(1, dt*10); dedosE[i] += ((gesto === "DOIS" ? 1 : 0) - dedosE[i]) * Math.min(1, dt*10); }
+  maoVisD += (((gesto && !["BAIXA"].includes(gesto)) ? 1 : 0) - maoVisD) * Math.min(1, dt*3.5);
+  maoVisE += ((gesto === "DOIS" ? 1 : 0) - maoVisE) * Math.min(1, dt*3.5);
+
+  // emoção
+  const pr = probs(F); let im = 0; pr.forEach((v,i) => { if (v > pr[im]) im = i; });
+  const cand = pr[im] < 0.58 ? "calma" : CLASSES[im];
+  if (cand !== est.cand){ est.cand = cand; est.desde = t; }
+  const precisa = est.cand === "calma" ? 0.8 : 1.4;
+  if (est.cand !== est.conf && t - est.desde >= precisa && (est.cand === "calma" || t - est.ult >= 2.2)){ est.conf = est.cand; est.ult = t; flash("mEmo"); }
+
+  // gestos efetivos (mão visível)
+  const gEf = maoVisD > 0.8 ? ({ABERTA:"ABERTA", V:"V", POLEGAR:"POLEGAR", ESCOLHER:"ESCOLHER"})[gesto] || null : null;
+  const baixa = F.h > 0.6, atencaoEmo = ["tristeza","medo","raiva"].includes(est.conf);
+  const ativos = {ABERTA: gEf==="ABERTA", V: gEf==="V", ESCOLHER: gEf==="ESCOLHER", BAIXA: baixa, EMO: atencaoEmo, COMB: baixa && atencaoEmo};
+  for (const c in cont) cont[c] = ativos[c] ? Math.min(cont[c] + dt, LIM[c]) : Math.max(0, cont[c] - 2*dt);
+  let info = conduta(gEf, baixa, est.conf);
+  if (PRIOR[info.conduta] <= PRIOR[infoAtual.conduta] && t < cooldownAte && infoAtual.conduta !== info.conduta) info = infoAtual;
+  else if (info.conduta !== infoAtual.conduta) cooldownAte = t + 2.5;
+  // escolha apontada
+  info.escolha = "";
+  if (info.conduta === "ABRIR OPÇÕES" && ultimoFrame.dedoIndicador){
+    const lb = (W-60)/4, p = ultimoFrame.dedoIndicador;
+    OPCOES.forEach((op,i) => { const x = 30 + i*lb; if (p.x >= x && p.x <= x+lb-14 && p.y >= H-196 && p.y <= H-76) info.escolha = op; });
+  }
+  if (info.escolha !== ultEsc){ ultEsc = info.escolha; escDesde = t; escReg = false; }
+  else if (info.escolha && !escReg && t - escDesde > 1){ escReg = true; evento(`Escolheu: ${info.escolha}`, "#f5c043"); }
+  if (info.conduta !== condutaAtual){ condutaAtual = info.conduta; if (EV[info.conduta]) evento(...EV[info.conduta]); }
+  if (gEf === "POLEGAR" && gAnterior !== "POLEGAR") evento("Sinalizou que está bem", "#3fd08a");
+  gAnterior = gEf;
+  infoAtual = info;
+
+  // indicadores
+  const P = Object.fromEntries(CLASSES.map((c,i) => [c, pr[i]]));
+  const att = baixa ? 0 : (0.92 + Math.sin(t*0.7)*0.08);
+  const val = clamp01(P.alegria + 0.5*P.surpresa + 0.6*P.calma), ten = clamp01(P.raiva + P.medo);
+  const eng = clamp01(0.45*att + 0.30*val + 0.15*(baixa?0:1) + 0.10*(1-ten));
+  acc.n++; acc.eng += eng; acc.att += att; acc.ten += ten; acc.emo[est.conf] = (acc.emo[est.conf]||0)+1;
+  if (t - ultAmostra >= 0.5){
+    ultAmostra = t;
+    const emoM = Object.entries(acc.emo).sort((a,b)=>b[1]-a[1])[0]?.[0] || "calma";
+    serie.push({t, eng: 100*acc.eng/acc.n, att: 100*acc.att/acc.n, ten: 100*acc.ten/acc.n, emo: emoM});
+    while (serie.length && t - serie[0].t > 62) serie.shift();
+    acc = {n:0, eng:0, att:0, ten:0, emo:{}};
+    desenharGrafico(t);
+  }
+
+  desenharCamera(t, info);
+
+  // painel
+  $("cdSq").style.background = info.cor; $("cdBar").style.background = info.cor;
+  $("cdBar").style.width = (info.ch ? Math.min(1, cont[info.ch]/LIM[info.ch]) * 100 : 100) + "%";
+  if (setT("cdV", info.conduta)) {}
+  setT("cdS", info.s);
+  if (setT("emoV", NOME_P[est.conf])) $("emoDot").style.background = COR[est.conf];
+  const ped = info.escolha ? "ESCOLHA" : ({ABERTA:"AJUDA", V:"PAUSA", POLEGAR:"OK", ESCOLHER:"ESCOLHA"})[gEf] || "NENHUM";
+  if (setT("pedV", ped)) flash("mPed");
+  const post = baixa ? "CABEÇA BAIXA" : gesto === "DOIS" && maoVisD > 0.8 ? "BRAÇOS ERGUIDOS" : (gesto === "BRACO" && maoVisD > 0.8) ? "BRAÇO ERGUIDO" : "NEUTRA";
+  if (setT("posV", post)) flash("mPos");
+  if (setT("attV", att > 0.5 ? "OLHANDO" : "DISPERSO")) flash("mAtt");
+  setT("tenV", Math.round(ten*100) + "%");
+  setT("blkV", (15 + Math.round(Math.sin(t*0.1)*2)) + "/min");
+  if (!loop._u || now - loop._u > 70){ loop._u = now;
+    CLASSES.forEach((c,i) => { $("pb_"+c).style.width = (pr[i]*100).toFixed(0)+"%"; $("pv_"+c).textContent = Math.round(pr[i]*100)+"%"; });
+  }
+  $("relogio").textContent = mmss(t);
+}
+
+// ---------------- gráfico ----------------
+const chart = $("chart"), cc = chart.getContext("2d");
+function desenharGrafico(t){
+  const r = chart.getBoundingClientRect(), s = palco.getBoundingClientRect().width/1280 || 1, dpr = (window.devicePixelRatio||1);
+  const Wc = chart.clientWidth, Hc = chart.clientHeight;
+  if (chart.width !== Math.round(Wc*dpr*s)){ chart.width = Math.round(Wc*dpr*s); chart.height = Math.round(Hc*dpr*s); }
+  cc.setTransform(dpr*s,0,0,dpr*s,0,0); cc.clearRect(0,0,Wc,Hc);
+  const pl = 26, pr = 30, top = 14, faixa = 9, eixo = 14, base = Hc - eixo - faixa - 5;
+  const x = tt => pl + (tt - (t-60))/60*(Wc-pl-pr), y = v => base - v/100*(base-top);
+  cc.font = "10px ui-monospace,Menlo,Consolas,monospace"; cc.textAlign = "right"; cc.textBaseline = "middle";
+  for (const v of [0,50,100]){ cc.strokeStyle = "#1c2a40"; cc.lineWidth = 1; cc.beginPath(); cc.moveTo(pl, Math.round(y(v))+.5); cc.lineTo(Wc-pr, Math.round(y(v))+.5); cc.stroke(); cc.fillStyle = "#687b98"; cc.fillText(v, pl-6, y(v)); }
+  cc.textAlign = "center"; cc.textBaseline = "top";
+  for (let k=0;k<=60;k+=20){ const tt = Math.floor((t-60+k)); if (tt >= 0) { cc.fillStyle = "#687b98"; cc.fillText(mmss(tt), x(tt), Hc - eixo + 2); } }
+  // faixa de emoção
+  for (let i=0;i<serie.length;i++){ const sa = serie[i], nx = i+1 < serie.length ? x(serie[i+1].t) : x(sa.t)+4; cc.fillStyle = COR[sa.emo]; cc.fillRect(x(sa.t), base+5, Math.max(1, nx - x(sa.t) + 0.5), faixa); }
+  // linhas (média móvel)
+  const fim = [];
+  for (const [kk,cor] of [["eng","#4a90f0"],["att","#1aa58f"],["ten","#d96f2c"]]){
+    cc.strokeStyle = cor; cc.lineWidth = 2.2; cc.lineJoin = "round"; cc.beginPath();
+    serie.forEach((sa,i) => { const j0 = Math.max(0,i-4); let m = 0; for (let j=j0;j<=i;j++) m += serie[j][kk]; m /= (i-j0+1); const X = x(sa.t), Y = y(m); i ? cc.lineTo(X,Y) : cc.moveTo(X,Y); if (i === serie.length-1) fim.push([X,Y,m,cor]); });
+    cc.stroke();
+  }
+  fim.sort((a,b)=>a[1]-b[1]); let ult = -99;
+  cc.textAlign = "left"; cc.textBaseline = "middle"; cc.font = "700 10.5px ui-monospace,Menlo,Consolas,monospace";
+  for (const [X,Y,m,cor] of fim){ cc.fillStyle = cor; cc.beginPath(); cc.arc(X,Y,3.5,0,Math.PI*2); cc.fill(); const ly = Math.max(Y, ult+11); ult = ly; cc.fillStyle = "#e9f1fb"; cc.fillText(Math.round(m), Wc-pr+6, ly); }
+  // eventos no topo
+  for (const e of eventos){ if (e.t < t-60) continue; cc.fillStyle = e.cor; cc.beginPath(); cc.arc(x(e.t), 5, 3.5, 0, Math.PI*2); cc.fill(); }
+}
+
+// ---------------- botões ----------------
+function marcarEmo(){ document.querySelectorAll("#bEmo button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.emo === emoBtn))); }
+function marcarGesto(){ document.querySelectorAll("#bGes button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.g === gesto))); }
+function setEmo(e){ emoBtn = e; Object.assign(alvoF, PROTO[e]); marcarEmo(); }
+function setGesto(g){
+  const t = tS();
+  if (gesto === g) gesto = null; else { gesto = g; gestoInicio = t; gestoAte = t + (g === "BAIXA" ? 10 : g === "ESCOLHER" ? 7 : 5); }
+  marcarGesto();
+}
+$("bEmo").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pararAuto(); setEmo(b.dataset.emo); });
+$("bGes").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pararAuto(); setGesto(b.dataset.g); });
+
+// ---------------- demonstração automática ----------------
+const ROTEIRO = [[0,()=>{setEmo("calma"); gesto=null; marcarGesto();}],[3,()=>setEmo("alegria")],[7,()=>setGesto("ABERTA")],[13,()=>setEmo("calma")],[15,()=>setGesto("ESCOLHER")],[23,()=>setEmo("surpresa")],[26,()=>setEmo("calma")],[28,()=>setGesto("BRACO")],[33,()=>setEmo("tristeza")],[34,()=>setGesto("BAIXA")],[45,()=>{setGesto("BAIXA"); setEmo("calma");}],[47,()=>setGesto("V")],[53,()=>setGesto("POLEGAR")],[58,()=>setEmo("raiva")],[64,()=>setEmo("calma")],[66,()=>setGesto("DOIS")],[72,null]];
+let auto = false, autoT0 = 0, autoI = 0;
+function passoAuto(t){
+  const tt = t - autoT0;
+  while (autoI < ROTEIRO.length && tt >= ROTEIRO[autoI][0]){ const f = ROTEIRO[autoI][1]; if (f) f(); else { autoT0 = t; autoI = -1; } autoI++; }
+}
+function pararAuto(){ if (!auto) return; auto = false; $("btnAuto").setAttribute("aria-pressed","false"); $("btnAuto").textContent = "▶ Demonstração automática"; }
+$("btnAuto").onclick = () => {
+  if (auto) return pararAuto();
+  auto = true; autoT0 = tS(); autoI = 0; $("btnAuto").setAttribute("aria-pressed","true"); $("btnAuto").textContent = "■ Parar demonstração";
+};
+if (location.hash === "#auto") $("btnAuto").click();
+
+// histórico inicial para o gráfico não começar vazio
+(() => { const t = 0; for (let i=120;i>0;i--){ const tt = -i*0.5; serie.push({t: tt, eng: 72 + Math.sin(i*0.21)*8 + (Math.random()-0.5)*6, att: 85 + Math.sin(i*0.13)*7 + (Math.random()-0.5)*6, ten: 12 + Math.sin(i*0.17)*5 + (Math.random()-0.5)*4, emo: i>70 && i<90 ? "alegria" : "calma"}); } })();
+evento("Início da sessão · Aluno A01", "#687b98");
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

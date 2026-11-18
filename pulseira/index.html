@@ -4,48 +4,135 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Gravar a pulseira · Solução GTEeN</title>
 <style>
-:root{--bg:#eef3fa;--card:#fff;--ink:#243247;--sub:#5f6d84;--azul:#1469be;--line:#dde4ee;--ok:#3fa75a;--warn:#e8a317}
+:root{--bg:#eef3fa;--card:#fff;--ink:#243247;--sub:#5f6d84;--azul:#1469be;--line:#dde4ee;--ok:#3fa75a;--erro:#d64545;--log:#0d1626;--logtx:#cfe0f5}
 @media (prefers-color-scheme:dark){:root{--bg:#0c1522;--card:#152234;--ink:#e3ebf6;--sub:#a3b2c8;--line:#24344b;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-.wrap{max-width:720px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left)) 48px}
-header{display:flex;gap:14px;align-items:center;background:var(--azul);color:#fff;border-radius:18px;padding:14px 18px;margin-bottom:18px}
+.wrap{max-width:760px;margin:0 auto;padding:24px max(16px,env(safe-area-inset-left)) 48px}
+header{display:flex;gap:14px;align-items:center;background:var(--azul);color:#fff;border-radius:18px;padding:14px 18px;margin-bottom:16px}
 header img{width:56px;height:56px;border-radius:12px}
 header h1{font-size:21px;margin:0}
 header p{margin:0;opacity:.85;font-size:14px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:14px}
-ol{margin:0;padding-left:22px;display:grid;gap:12px}
-li b{color:var(--azul)}
-.botao{display:flex;justify-content:center;padding:18px 0 6px}
-esp-web-install-button button[slot=activate]{font:700 19px system-ui,sans-serif;background:var(--azul);color:#fff;border:0;border-radius:14px;padding:16px 28px;cursor:pointer}
-.aviso{font-size:14px;color:var(--sub)}
-.aviso b{color:var(--ink)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+ol{margin:0;padding-left:22px;display:grid;gap:8px}
+.botoes{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:16px}
+button{font:700 18px system-ui,sans-serif;background:var(--azul);color:#fff;border:0;border-radius:14px;padding:15px 26px;cursor:pointer}
+button.sec{font-size:14px;background:transparent;color:var(--ink);border:1px solid var(--line);padding:10px 14px}
+button:disabled{opacity:.5;cursor:default}
+.estado{font-size:20px;font-weight:700;text-align:center;margin-top:14px;min-height:30px}
+.estado.ok{color:var(--ok)} .estado.erro{color:var(--erro)}
+.barra{height:12px;background:var(--line);border-radius:8px;overflow:hidden;margin-top:10px}
+.barra i{display:block;height:100%;width:0;background:var(--ok);transition:width .2s}
+pre{background:var(--log);color:var(--logtx);border-radius:12px;padding:12px 14px;font:13px/1.45 ui-monospace,Menlo,monospace;height:260px;overflow:auto;white-space:pre-wrap;margin:0}
+.sub{color:var(--sub);font-size:14px}
 a.btn{display:inline-block;background:var(--ok);color:#fff;text-decoration:none;font-weight:700;border-radius:12px;padding:12px 20px}
 </style>
-<script type="module" src="ewt/install-button.js"></script>
 </head>
 <body><div class="wrap">
-<header><img src="logo.jpg" alt="Logo GTEeN"><div><h1>Gravar o programa na pulseira</h1><p>Solução da Equipe GTEeN · pulseira do professor</p></div></header>
+<header><img src="logo.jpg" alt="Logo GTEeN"><div><h1>Gravar o programa na pulseira</h1><p>Solução da Equipe GTEeN · use o Google Chrome</p></div></header>
 
 <div class="card">
 <ol>
-  <li>Ligue a placa da pulseira <b>no USB do computador</b> com o cabo de dados.</li>
-  <li>Clique no botão azul abaixo. Na janela do Chrome, escolha a porta da placa (costuma aparecer como <b>USB JTAG/serial debug unit</b>) e clique em <b>Conectar</b>.</li>
-  <li>Clique em <b>Install / Instalar</b> e aguarde cerca de 1 minuto, até aparecer "Installation complete".</li>
-  <li>Pronto: o motor <b>vibra 1 vez</b> e o LED azul da placa fica <b>piscando</b>. A pulseira já aparece no painel.</li>
+  <li>Placa ligada no USB do Mac.</li>
+  <li>Clique no botão azul e escolha <b>USB JTAG/serial debug unit</b>. Depois clique em <b>Conectar</b>.</li>
+  <li>Espere. A página tenta sozinha 3 jeitos de entrar no modo de gravação e mostra tudo no quadro preto.</li>
 </ol>
-<div class="botao">
-  <esp-web-install-button manifest="manifest.json">
-    <button slot="activate">Gravar programa na pulseira</button>
-    <span slot="unsupported"><b>Este navegador não grava placas.</b> Abra esta página no Google Chrome ou no Microsoft Edge do computador.</span>
-    <span slot="not-allowed">Abra esta página pelo endereço https.</span>
-  </esp-web-install-button>
+<div class="botoes">
+  <button id="btGravar">Gravar programa na pulseira</button>
 </div>
+<div class="estado" id="estado"></div>
+<div class="barra"><i id="barra"></i></div>
 </div>
 
-<div class="card aviso">
-  <p><b>A porta não aparece na lista?</b> Troque o cabo (alguns cabos só carregam e não passam dados) ou segure o botão <b>BOOT</b> da placa enquanto liga o cabo, solte, e tente de novo.</p>
-  <p><b>Depois de gravar:</b> abra o painel, clique em ⌚ Pulseira e conecte. Se ela conectar mas não vibrar, use <b>Configurações › Pulseira do professor › Descobrir o pino do motor</b>.</p>
-  <p><a class="btn" href="../solucao/">Abrir o painel</a></p>
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+    <b>O que está acontecendo</b>
+    <span><button class="sec" id="btMonitor">Ver mensagens da placa</button> <button class="sec" id="btCopiar">Copiar texto</button></span>
+  </div>
+  <pre id="log">Aguardando…</pre>
+  <p class="sub">Se der erro, tire uma foto deste quadro preto e mande para o Claude.</p>
+  <p><a class="btn" href="../solucao/">Abrir o painel</a> <a class="sub" href="simples.html" style="margin-left:10px">gravador alternativo</a></p>
 </div>
+
+<script type="module">
+import { ESPLoader, Transport } from "./esptool.js";
+const $ = id => document.getElementById(id);
+const L = $("log"); let primeira = true;
+function log(t){ if (primeira){ L.textContent = ""; primeira = false; } L.textContent += t + "\n"; L.scrollTop = L.scrollHeight; }
+const terminal = { clean(){}, writeLine(d){ log(d); }, write(d){ if (primeira){ L.textContent=""; primeira=false; } L.textContent += d; L.scrollTop = L.scrollHeight; } };
+function estado(t, cls=""){ $("estado").textContent = t; $("estado").className = "estado " + cls; }
+const PARTES = [["fw/bootloader.bin",0x0],["fw/partitions.bin",0x8000],["fw/boot_app0.bin",0xe000],["fw/firmware.bin",0x10000]];
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+if (!("serial" in navigator)){ estado("Abra esta página no Google Chrome (o Safari não grava placas).", "erro"); $("btGravar").disabled = true; }
+
+$("btGravar").onclick = async () => {
+  $("btGravar").disabled = true; $("barra").style.width = "0%";
+  let port, transport, loader, chip;
+  try {
+    port = await navigator.serial.requestPort();
+    const info = port.getInfo(); log(`Porta escolhida: VID 0x${(info.usbVendorId||0).toString(16)} PID 0x${(info.usbProductId||0).toString(16)}`);
+  } catch(e){ estado("Nenhuma porta escolhida."); $("btGravar").disabled = false; return; }
+  for (const modo of ["default_reset", "usb_reset", "no_reset"]){
+    estado(`Conectando à placa (tentativa: ${modo})…`);
+    log(`\n=== Tentativa: ${modo} ===`);
+    try {
+      transport = new Transport(port, false);
+      loader = new ESPLoader({ transport, baudrate: 115200, terminal, debugLogging: false });
+      chip = await loader.main(modo);
+      log(`Chip encontrado: ${chip}`);
+      break;
+    } catch(e){
+      log(`Falhou: ${e && e.message ? e.message : e}`);
+      try { await transport.disconnect(); } catch(_){}
+      chip = null; await dormir(800);
+    }
+  }
+  if (!chip){
+    estado("Não consegui falar com a placa. Veja a dica abaixo.", "erro");
+    log("\nDICA: com o cabo ligado, segure BOOT, aperte e solte RESET, solte BOOT. Depois clique no botão azul de novo.\nSe continuar, troque o cabo USB ou a porta do Mac.");
+    $("btGravar").disabled = false; return;
+  }
+  if (!/ESP32-C3/i.test(chip)){
+    estado(`Esta placa é ${chip}, não ESP32-C3. Mande uma foto para o Claude compilar para ela.`, "erro");
+    try { await transport.disconnect(); } catch(_){}
+    $("btGravar").disabled = false; return;
+  }
+  try {
+    estado("Gravando… não desconecte o cabo.");
+    const fileArray = [];
+    for (const [p, a] of PARTES){ const b = new Uint8Array(await (await fetch(p, {cache:"no-store"})).arrayBuffer()); fileArray.push({ data: b, address: a }); log(`Arquivo ${p}: ${b.length} bytes em 0x${a.toString(16)}`); }
+    const total = fileArray.reduce((s,f)=>s+f.data.length,0); const feito = new Array(fileArray.length).fill(0);
+    await loader.writeFlash({ fileArray, flashMode: "keep", flashFreq: "keep", flashSize: "keep", eraseAll: false, compress: true,
+      reportProgress: (i, w, t) => { feito[i] = fileArray[i].data.length * (w / t); $("barra").style.width = (100*feito.reduce((a,b)=>a+b,0)/total).toFixed(0) + "%"; } });
+    $("barra").style.width = "100%";
+    log("\nGravação concluída. Reiniciando a placa…");
+    try { await loader.after("hard_reset"); } catch(e){ log("Aviso ao reiniciar: " + e.message); }
+    try { await transport.disconnect(); } catch(_){}
+    estado("Pronto! O motor deve vibrar 1 vez e o LED piscar. Se não, aperte RESET.", "ok");
+  } catch(e){
+    log("ERRO na gravação: " + (e && e.message ? e.message : e));
+    estado("A gravação falhou. Mande uma foto do quadro preto.", "erro");
+    try { await transport.disconnect(); } catch(_){}
+  }
+  $("btGravar").disabled = false;
+};
+
+// ver as mensagens que a placa escreve (para conferir se o programa está rodando)
+$("btMonitor").onclick = async () => {
+  try {
+    const port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    log("\n=== Mensagens da placa (aperte RESET para ver o início) ===");
+    const dec = new TextDecoder(); const r = port.readable.getReader();
+    const fim = Date.now() + 20000;
+    while (Date.now() < fim){
+      const corrida = await Promise.race([r.read(), dormir(500).then(()=>null)]);
+      if (corrida && corrida.value) terminal.write(dec.decode(corrida.value));
+      if (corrida && corrida.done) break;
+    }
+    r.releaseLock(); await port.close(); log("\n=== fim (20 s) ===");
+  } catch(e){ log("Monitor: " + e.message); }
+};
+$("btCopiar").onclick = async () => { try { await navigator.clipboard.writeText(L.textContent); $("btCopiar").textContent = "Copiado"; } catch(e){} };
+</script>
 </div></body></html>

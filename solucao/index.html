@@ -1514,12 +1514,13 @@ $("cfCamera").onchange = async e => { DB.config.camera = e.target.value; salvar(
 // ============================================================
 const PULSEIRA_CARAC = "7a0b1001-5c1e-4b7a-9f3e-0d2a6c8e4f10";
 const PULSEIRA_SERVICO_PADRAO = "7a0b1000-5c1e-4b7a-9f3e-0d2a6c8e4f10";
-const VIBRA_PADRAO = {"OFERECER AJUDA":3, "OFERECER PAUSA":2, "ACOLHER":2, "ABRIR OPÇÕES":1, "ESCOLHA":1, "VERIFICAR CANSAÇO":1, "REDUZIR PRESSÃO":1, "OBSERVAR":0};
+const VIBRA_PADRAO = {"OFERECER AJUDA":3, "OFERECER PAUSA":2, "ACOLHER":2, "ESCOLHA":1, "ABRIR OPÇÕES":0, "VERIFICAR CANSAÇO":0, "REDUZIR PRESSÃO":0, "OBSERVAR":0};
 const ROTULO_VIBRA = {"OFERECER AJUDA":"Pedido de ajuda", "OFERECER PAUSA":"Pedido de pausa", "ACOLHER":"Acolher (postura + emoção)", "ABRIR OPÇÕES":"Aluno quer escolher", "ESCOLHA":"Escolha confirmada", "VERIFICAR CANSAÇO":"Cabeça baixa prolongada", "REDUZIR PRESSÃO":"Postura retraída", "OBSERVAR":"Emoção de atenção"};
+if (DB.config.vibraVer !== 2){ DB.config.vibra = {...VIBRA_PADRAO}; DB.config.vibraVer = 2; }   // novos padrões: só pedidos fortes vibram
 DB.config.vibra = Object.assign({...VIBRA_PADRAO}, DB.config.vibra);
 DB.config.pbNome = DB.config.pbNome || "Pulseira-VV";
 DB.config.pbServico = DB.config.pbServico || PULSEIRA_SERVICO_PADRAO;
-const INTERVALO_MESMO_SINAL = 5, INTERVALO_QUALQUER = 2;   // segundos
+const INTERVALO_MESMO_SINAL = 15, INTERVALO_QUALQUER = 4;   // segundos
 const pulseira = {dev:null, carac:null, estado:"desligada", ult:{}, ultT:-99, ultVezes:0, tentativas:0, manual:false};
 const uuidOk = u => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.trim());
 function estadoPulseira(e, msg){
@@ -1585,7 +1586,7 @@ function alertarPulseira(chave){
   vibrarPulseira(vezes).then(ok => { if (ok) registrarEvento("pulseira", `Pulseira vibrou ${vezes}× · ${ROTULO_VIBRA[chave] || chave}`); });
 }
 // descobrir o pino do motor: a placa aceita o byte 100 + pino, salva e vibra 1 vez nele
-const PINOS_C3 = [3, 4, 5, 6, 7, 10, 20, 21, 0, 1, 2];
+const PINOS_C3 = [3, 4, 5, 6, 7, 10, 20, 21, 0, 1, 2, 8];
 let achaPino = null;
 async function escreverByte(b){
   if (!pulseira.carac) return false;

@@ -220,6 +220,7 @@ body.aluno .soAluno{display:flex}
       <button class="hbtn" id="btnNovoAluno">+ Aluno</button>
       <span class="pill num" id="pillTempo">00:00</span>
       <span class="pill" id="privPill">PRIV OFF</span>
+      <button class="hbtn" id="btnPulseira" title="Pulseira do professor">⌚ Pulseira: desligada</button>
       <button class="hbtn" id="btnModoAluno">Modo aluno</button>
     </div>
   </header>
@@ -480,6 +481,20 @@ body.aluno .soAluno{display:flex}
           <label class="field">Faixa de alerta sobre a imagem (o aluno pode ver)<input type="checkbox" id="cfBanner" class="sw-toggle"></label>
           <label class="field">Piscar o título da aba do navegador<input type="checkbox" id="cfTitulo" class="sw-toggle"></label>
         </div>
+        <h3 style="margin-top:16px">Pulseira do professor</h3>
+        <div class="row" style="margin-bottom:8px">
+          <button class="btn sm" id="pbConectar">Conectar pulseira</button>
+          <button class="btn ghost sm" id="pbTestar" disabled>Testar vibração</button>
+          <button class="btn ghost sm" id="pbDesconectar" disabled>Desconectar</button>
+        </div>
+        <div class="tstatus" id="pbStatus">Desconectada. Ligue a pulseira e clique em Conectar (Chrome ou Edge).</div>
+        <div class="fields" id="cfVibra" style="margin-top:6px"></div>
+        <details style="margin-top:8px;font-size:12.5px;color:var(--sub)"><summary style="cursor:pointer">Avançado: identificação Bluetooth</summary>
+          <div class="fields" style="margin-top:6px">
+            <label class="field">Nome da pulseira<input type="text" id="cfPbNome" autocomplete="off"></label>
+            <label class="field">UUID do serviço (firmware)<input type="text" id="cfPbServico" autocomplete="off" spellcheck="false"></label>
+          </div>
+        </details>
         <h3 style="margin-top:16px">Detecção</h3>
         <div class="fields">
           <label class="field">Câmera<select id="cfCamera"><option value="">Padrão</option></select></label>
@@ -556,6 +571,7 @@ const TIPOS_EVENTO = {
   ausente:{nome:"Saiu do enquadramento", cor:()=>"#8b97aa"},
   pausaAluno:{nome:"Aluno pausou o sistema", cor:()=>"#8b97aa"},
   conferencia:{nome:"Conferência", cor:()=>"#8b97aa"},
+  pulseira:{nome:"Pulseira vibrou", cor:()=>"#8b97aa"},
   sessao:{nome:"Sessão", cor:()=>"#8b97aa"},
 };
 const EVENTO_DA_CONDUTA = {"OFERECER AJUDA":"ajuda","OFERECER PAUSA":"pausa","ACOLHER":"acolher","VERIFICAR CANSAÇO":"cansaco","REDUZIR PRESSÃO":"retraido","OBSERVAR":"emocao"};
@@ -1157,7 +1173,7 @@ function desenharGrafico(janelaForcada){
     const ly = Math.max(f.yy, ultY + 13); ultY = ly; c.fillStyle = ink; c.fillText(String(Math.round(f.v)), Wc - padR + 10, ly);
   }
   for (const e of sessao.eventos){
-    if (["sessao","conferencia"].includes(e.tipo) || e.t < t0) continue;
+    if (["sessao","conferencia","pulseira"].includes(e.tipo) || e.t < t0) continue;
     c.globalAlpha = e.falso ? 0.35 : 1;
     c.fillStyle = TIPOS_EVENTO[e.tipo].cor(); c.beginPath(); c.arc(x(e.t), 9, 4.5, 0, Math.PI*2); c.fill();
     c.globalAlpha = 1;
@@ -1175,7 +1191,7 @@ function atualizarTip(){
   if (idx < 0 || t < geo.t0){ tip.hidden = true; return; }
   const s = A[idx], sm = {};
   for (const [k] of SERIES){ const arr = suavizar(A.slice(Math.max(0,idx-4), idx+1), k); sm[k] = arr[arr.length-1]; }
-  const evs = sessao.eventos.filter(e => !["sessao","conferencia"].includes(e.tipo) && Math.abs(e.t - t) < Math.max(2, geo.span/150));
+  const evs = sessao.eventos.filter(e => !["sessao","conferencia","pulseira"].includes(e.tipo) && Math.abs(e.t - t) < Math.max(2, geo.span/150));
   tip.innerHTML = `<div class="t">${mmss(s.t)} · ${s.relogio.toLocaleTimeString("pt-BR")}</div>`
     + (s.emo ? `<div class="r"><span class="sw" style="background:${CORES_EMOCOES[s.emo]}"></span>${NOME_CURTO[s.emo]}</div>` : `<div class="r">Rosto fora do quadro</div>`)
     + SERIES.map(([k,n,tok]) => `<div class="r"><span style="width:14px;height:3px;border-radius:2px;background:var(${tok})"></span>${n}<b>${sm[k]==null?"—":Math.round(sm[k])}</b></div>`).join("")
@@ -1429,6 +1445,7 @@ new ResizeObserver(() => { if (abaAtual === "hist") desenharHistorico([...perfil
 // CONFIGURAÇÕES
 // ============================================================
 function renderConfig(){
+  renderPulseiraConfig();
   $("cfNome").value = perfil.nome; $("cfCodigo").value = perfil.codigo;
   $("cfUsarCodigo").checked = DB.config.usarCodigo; $("cfSom").checked = DB.config.som; $("cfBanner").checked = DB.config.banner;
   $("cfTitulo").checked = DB.config.titulo; $("cfFusao").checked = DB.config.fusao;
@@ -1482,6 +1499,94 @@ async function listarCameras(){
   } catch(e){}
 }
 $("cfCamera").onchange = async e => { DB.config.camera = e.target.value; salvar(); if (video.srcObject) await abrirCamera(); };
+
+// ============================================================
+// PULSEIRA DO PROFESSOR (Bluetooth) — mesmo protocolo do pulseira.py:
+// escreve 1 byte (número de vibrações, 1 a 9) na característica da placa
+// ============================================================
+const PULSEIRA_CARAC = "7a0b1001-5c1e-4b7a-9f3e-0d2a6c8e4f10";
+const PULSEIRA_SERVICO_PADRAO = "7a0b1000-5c1e-4b7a-9f3e-0d2a6c8e4f10";
+const VIBRA_PADRAO = {"OFERECER AJUDA":3, "OFERECER PAUSA":2, "ACOLHER":2, "ABRIR OPÇÕES":1, "ESCOLHA":1, "VERIFICAR CANSAÇO":1, "REDUZIR PRESSÃO":1, "OBSERVAR":0};
+const ROTULO_VIBRA = {"OFERECER AJUDA":"Pedido de ajuda", "OFERECER PAUSA":"Pedido de pausa", "ACOLHER":"Acolher (postura + emoção)", "ABRIR OPÇÕES":"Aluno quer escolher", "ESCOLHA":"Escolha confirmada", "VERIFICAR CANSAÇO":"Cabeça baixa prolongada", "REDUZIR PRESSÃO":"Postura retraída", "OBSERVAR":"Emoção de atenção"};
+DB.config.vibra = Object.assign({...VIBRA_PADRAO}, DB.config.vibra);
+DB.config.pbNome = DB.config.pbNome || "Pulseira-VV";
+DB.config.pbServico = DB.config.pbServico || PULSEIRA_SERVICO_PADRAO;
+const INTERVALO_MESMO_SINAL = 5, INTERVALO_QUALQUER = 2;   // segundos
+const pulseira = {dev:null, carac:null, estado:"desligada", ult:{}, ultT:-99, ultVezes:0, tentativas:0, manual:false};
+const uuidOk = u => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.trim());
+function estadoPulseira(e, msg){
+  pulseira.estado = e;
+  const txt = {desligada:"desligada", procurando:"procurando…", conectando:"conectando…", conectada:"conectada", reconectando:"reconectando…", erro:"erro"}[e] || e;
+  $("btnPulseira").textContent = `⌚ Pulseira: ${txt}`;
+  $("btnPulseira").style.background = e === "conectada" ? "rgba(63,167,90,.55)" : e === "erro" ? "rgba(229,64,63,.55)" : "";
+  $("pbTestar").disabled = e !== "conectada"; $("pbDesconectar").disabled = !pulseira.dev;
+  $("pbConectar").textContent = pulseira.dev ? "Trocar pulseira" : "Conectar pulseira";
+  if (msg) setText($("pbStatus"), msg);
+}
+async function conectarPulseira(){
+  if (!navigator.bluetooth){ estadoPulseira("erro", "Este navegador não tem Bluetooth para sites. Use o Google Chrome ou o Microsoft Edge no computador (o Safari não tem)."); return; }
+  if (!isSecureContext){ estadoPulseira("erro", "O Bluetooth só funciona com o site aberto pelo link https (GitHub) ou pelo atalho sem internet (localhost)."); return; }
+  const servico = DB.config.pbServico.trim().toLowerCase();
+  if (!uuidOk(servico)){ estadoPulseira("erro", "UUID do serviço inválido em Configurações > Avançado."); return; }
+  try {
+    estadoPulseira("procurando", "Escolha a pulseira na janela do navegador.");
+    const dev = await navigator.bluetooth.requestDevice({filters:[{name: DB.config.pbNome}, {namePrefix: "Pulseira"}], optionalServices:[servico]});
+    if (pulseira.dev && pulseira.dev !== dev){ pulseira.manual = true; try{ pulseira.dev.gatt.disconnect(); }catch(e){} }
+    pulseira.dev = dev; pulseira.manual = false;
+    dev.addEventListener("gattserverdisconnected", aoDesconectarPulseira);
+    await abrirPulseira();
+  } catch(e){
+    if (e.name === "NotFoundError" && /cancel/i.test(e.message)) estadoPulseira(pulseira.carac ? "conectada" : "desligada", "Nenhuma pulseira escolhida.");
+    else estadoPulseira("erro", "Não foi possível conectar: " + e.message);
+  }
+}
+async function abrirPulseira(){
+  estadoPulseira("conectando", "Conectando…");
+  const server = await pulseira.dev.gatt.connect();
+  let svc;
+  try { svc = await server.getPrimaryService(DB.config.pbServico.trim().toLowerCase()); }
+  catch(e){ throw new Error("a pulseira foi encontrada, mas o UUID do serviço não confere com o firmware. Confira em Avançado."); }
+  pulseira.carac = await svc.getCharacteristic(PULSEIRA_CARAC);
+  pulseira.tentativas = 0;
+  estadoPulseira("conectada", `Conectada a ${pulseira.dev.name || "pulseira"}. Ela vibra quando o sistema confirmar um alerta.`);
+}
+function aoDesconectarPulseira(){
+  pulseira.carac = null;
+  if (pulseira.manual){ estadoPulseira("desligada", "Desconectada."); return; }
+  if (pulseira.tentativas >= 20){ estadoPulseira("erro", "A pulseira saiu do alcance ou desligou. Clique em Conectar para tentar de novo."); return; }
+  pulseira.tentativas++;
+  estadoPulseira("reconectando", `Conexão perdida. Tentando reconectar (${pulseira.tentativas})…`);
+  setTimeout(async () => { if (pulseira.manual || !pulseira.dev) return; try { await abrirPulseira(); } catch(e){ aoDesconectarPulseira(); } }, Math.min(15000, 1500*pulseira.tentativas));
+}
+async function vibrarPulseira(vezes){
+  if (!pulseira.carac) return false;
+  const dado = Uint8Array.of(Math.max(1, Math.min(9, vezes|0)));
+  try {
+    if (pulseira.carac.writeValueWithResponse) await pulseira.carac.writeValueWithResponse(dado); else await pulseira.carac.writeValue(dado);
+    return true;
+  } catch(e){ console.warn("Pulseira:", e); setText($("pbStatus"), "Falha ao enviar a vibração: " + e.message); return false; }
+}
+// mais intenso passa na frente; o mesmo sinal não repete em menos de 5 s
+function alertarPulseira(chave){
+  const vezes = DB.config.vibra[chave] | 0;
+  if (!vezes || !pulseira.carac) return;
+  const t = agora();
+  if (t - (pulseira.ult[chave] ?? -99) < INTERVALO_MESMO_SINAL) return;
+  if (t - pulseira.ultT < INTERVALO_QUALQUER && vezes <= pulseira.ultVezes) return;
+  pulseira.ult[chave] = t; pulseira.ultT = t; pulseira.ultVezes = vezes;
+  vibrarPulseira(vezes).then(ok => { if (ok) registrarEvento("pulseira", `Pulseira vibrou ${vezes}× · ${ROTULO_VIBRA[chave] || chave}`); });
+}
+function renderPulseiraConfig(){
+  $("cfVibra").innerHTML = Object.keys(VIBRA_PADRAO).map(k => `<label class="field">${ROTULO_VIBRA[k]}<select data-vibra="${esc(k)}">${[0,1,2,3,4,5].map(n => `<option value="${n}" ${DB.config.vibra[k]===n?"selected":""}>${n ? n + (n>1 ? " vibrações" : " vibração") : "Não vibrar"}</option>`).join("")}</select></label>`).join("");
+  $("cfPbNome").value = DB.config.pbNome; $("cfPbServico").value = DB.config.pbServico;
+}
+$("cfVibra").addEventListener("change", e => { const s = e.target.closest("[data-vibra]"); if (!s) return; DB.config.vibra[s.dataset.vibra] = +s.value; salvar(); });
+$("cfPbNome").oninput = e => { DB.config.pbNome = e.target.value.trim() || "Pulseira-VV"; salvar(); };
+$("cfPbServico").oninput = e => { DB.config.pbServico = e.target.value.trim(); salvar(); };
+$("pbConectar").onclick = conectarPulseira;
+$("pbTestar").onclick = async () => { if (await vibrarPulseira(1)) setText($("pbStatus"), "Vibração de teste enviada."); };
+$("pbDesconectar").onclick = () => { pulseira.manual = true; try{ pulseira.dev?.gatt.disconnect(); }catch(e){} pulseira.dev = null; pulseira.carac = null; estadoPulseira("desligada", "Desconectada."); };
+$("btnPulseira").onclick = () => { if (pulseira.estado === "conectada") vibrarPulseira(1); else conectarPulseira(); };
 
 // ---------- alunos ----------
 function renderSeletor(){
@@ -1718,11 +1823,11 @@ function loop(){
   const info = aplicarCooldown(gerarConduta(emo, gesto, postura));
   const escolha = detectarOpcao(posInd, info);
   alertar(info);
-  if (info.conduta !== condutaAnterior){ const tipo = EVENTO_DA_CONDUTA[info.conduta]; if (tipo) registrarEvento(tipo); condutaAnterior = info.conduta; }
+  if (info.conduta !== condutaAnterior){ const tipo = EVENTO_DA_CONDUTA[info.conduta]; if (tipo) registrarEvento(tipo); alertarPulseira(info.conduta); condutaAnterior = info.conduta; }
   if (gesto === "CHECK" && gestoAnterior !== "CHECK") registrarEvento("ok");
   gestoAnterior = gesto;
   if (escolha !== escolhaEst.op){ escolhaEst.op = escolha; escolhaEst.desde = tNow; escolhaEst.registrada = false; }
-  else if (escolha && !escolhaEst.registrada && tNow - escolhaEst.desde > 1.0){ escolhaEst.registrada = true; registrarEvento("escolha", `Escolheu: ${escolha}`); beep(740); }
+  else if (escolha && !escolhaEst.registrada && tNow - escolhaEst.desde > 1.0){ escolhaEst.registrada = true; registrarEvento("escolha", `Escolheu: ${escolha}`); beep(740); alertarPulseira("ESCOLHA"); }
 
   acumular({face: temRosto, emo, probs: probs || [], att: ind?.att ?? 0, val: ind?.val ?? 0, ten: ind?.ten ?? 0, eng: ind?.eng ?? 0, postura, gesto, conduta: info.conduta});
   desenharAlerta(info); desenharOpcoes(info, escolha); desenharGravacao();

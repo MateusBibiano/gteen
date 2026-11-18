@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gravar a pulseira · Solução GTEeN</title>
+<style>
+:root{--bg:#eef3fa;--card:#fff;--ink:#243247;--sub:#5f6d84;--azul:#1469be;--line:#dde4ee;--ok:#3fa75a;--warn:#e8a317}
+@media (prefers-color-scheme:dark){:root{--bg:#0c1522;--card:#152234;--ink:#e3ebf6;--sub:#a3b2c8;--line:#24344b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left)) 48px}
+header{display:flex;gap:14px;align-items:center;background:var(--azul);color:#fff;border-radius:18px;padding:14px 18px;margin-bottom:18px}
+header img{width:56px;height:56px;border-radius:12px}
+header h1{font-size:21px;margin:0}
+header p{margin:0;opacity:.85;font-size:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin-bottom:14px}
+ol{margin:0;padding-left:22px;display:grid;gap:12px}
+li b{color:var(--azul)}
+.botao{display:flex;justify-content:center;padding:18px 0 6px}
+esp-web-install-button button[slot=activate]{font:700 19px system-ui,sans-serif;background:var(--azul);color:#fff;border:0;border-radius:14px;padding:16px 28px;cursor:pointer}
+.aviso{font-size:14px;color:var(--sub)}
+.aviso b{color:var(--ink)}
+a.btn{display:inline-block;background:var(--ok);color:#fff;text-decoration:none;font-weight:700;border-radius:12px;padding:12px 20px}
+</style>
+<script type="module" src="ewt/install-button.js"></script>
+</head>
+<body><div class="wrap">
+<header><img src="logo.jpg" alt="Logo GTEeN"><div><h1>Gravar o programa na pulseira</h1><p>Solução da Equipe GTEeN · pulseira do professor</p></div></header>
+
+<div class="card">
+<ol>
+  <li>Ligue a placa da pulseira <b>no USB do computador</b> com o cabo de dados.</li>
+  <li>Clique no botão azul abaixo. Na janela do Chrome, escolha a porta da placa (costuma aparecer como <b>USB JTAG/serial debug unit</b>) e clique em <b>Conectar</b>.</li>
+  <li>Clique em <b>Install / Instalar</b> e aguarde cerca de 1 minuto, até aparecer "Installation complete".</li>
+  <li>Pronto: o motor <b>vibra 1 vez</b> e o LED azul da placa fica <b>piscando</b>. A pulseira já aparece no painel.</li>
+</ol>
+<div class="botao">
+  <esp-web-install-button manifest="manifest.json">
+    <button slot="activate">Gravar programa na pulseira</button>
+    <span slot="unsupported"><b>Este navegador não grava placas.</b> Abra esta página no Google Chrome ou no Microsoft Edge do computador.</span>
+    <span slot="not-allowed">Abra esta página pelo endereço https.</span>
+  </esp-web-install-button>
+</div>
+</div>
+
+<div class="card aviso">
+  <p><b>A porta não aparece na lista?</b> Troque o cabo (alguns cabos só carregam e não passam dados) ou segure o botão <b>BOOT</b> da placa enquanto liga o cabo, solte, e tente de novo.</p>
+  <p><b>Depois de gravar:</b> abra o painel, clique em ⌚ Pulseira e conecte. Se ela conectar mas não vibrar, use <b>Configurações › Pulseira do professor › Descobrir o pino do motor</b>.</p>
+  <p><a class="btn" href="../solucao/">Abrir o painel</a></p>
+</div>
+</div></body></html>

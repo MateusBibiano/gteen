@@ -506,6 +506,7 @@ body.aluno .soAluno{display:flex}
         <h3 style="margin-top:16px">Detecção</h3>
         <div class="fields">
           <label class="field">Câmera<select id="cfCamera"><option value="">Padrão</option></select></label>
+          <label class="field">Velocidade de resposta<select id="cfVelocidade"><option value="rapido">Rápida (alerta em ~0,3 s)</option><option value="normal">Normal (~0,6 s)</option><option value="cauteloso">Cautelosa (menos alarmes falsos)</option></select></label>
           <label class="field">Combinar com microexpressões (modelo padrão)<input type="checkbox" id="cfFusao" class="sw-toggle"></label>
         </div>
         <h3 style="margin-top:16px">Logo da equipe</h3>
@@ -542,7 +543,7 @@ const DEMO = location.hash === "#demo";
 
 // ---------- configurações ----------
 const JANELA_SUAVIZACAO = 20;
-const TEMPO_MINIMO_TROCA_EMOCAO = 2.2, TEMPO_CONFIRMACAO_EMOCAO = 1.4;
+let TEMPO_MINIMO_TROCA_EMOCAO = 1.2, TEMPO_CONFIRMACAO_EMOCAO = 0.8, QUADROS_GESTO = 2;
 const CONFIANCA_MINIMA_EMOCAO = 0.58, CONFIANCA_MINIMA_RAIVA = 0.84, CONFIANCA_MINIMA_MEDO = 0.72;
 const CONF_MIN_ALUNO = 0.5;
 const LIMIAR_ROSTO_NEUTRO = 0.042;
@@ -620,6 +621,19 @@ function salvar(){
   }, 400);
 }
 const rotulo = () => DB.config.usarCodigo ? perfil.codigo : perfil.nome;
+// velocidade de resposta: quanto tempo um sinal precisa ficar firme antes de virar alerta
+const VELOCIDADES = {
+  rapido:    {lim:{socorro:0.25, pausa:0.35, selecao:0.3, postura_emocao:1.2, cabeca_baixa:2.0, postura_retraida:2.0, emocao_atencao:2.5}, conf:0.8, troca:1.2, quadros:2, pbMesmo:6,  pbQualquer:1.5},
+  normal:    {lim:{socorro:0.5,  pausa:0.8,  selecao:0.5, postura_emocao:2.0, cabeca_baixa:3.0, postura_retraida:3.0, emocao_atencao:4.0}, conf:1.4, troca:2.2, quadros:3, pbMesmo:15, pbQualquer:4},
+  cauteloso: {lim:{socorro:0.8,  pausa:1.2,  selecao:0.8, postura_emocao:3.0, cabeca_baixa:4.0, postura_retraida:4.0, emocao_atencao:5.0}, conf:2.0, troca:3.0, quadros:4, pbMesmo:20, pbQualquer:5},
+};
+DB.config.velocidade = VELOCIDADES[DB.config.velocidade] ? DB.config.velocidade : "rapido";
+function aplicarVelocidade(){
+  const v = VELOCIDADES[DB.config.velocidade] || VELOCIDADES.rapido;
+  Object.assign(LIMIARES, v.lim);
+  TEMPO_CONFIRMACAO_EMOCAO = v.conf; TEMPO_MINIMO_TROCA_EMOCAO = v.troca; QUADROS_GESTO = v.quadros;
+  if (typeof INTERVALO_MESMO_SINAL !== "undefined"){ INTERVALO_MESMO_SINAL = v.pbMesmo; INTERVALO_QUALQUER = v.pbQualquer; }
+}
 
 // ============================================================
 // MODELO PADRÃO (RandomForest exportado do .pkl)
@@ -752,7 +766,7 @@ function gestoBruto(L){
 const gestoEstavel = {ultimo:"NEUTRO", n:0, valido:"NEUTRO"};
 function estabilizarGesto(g){
   if (g === gestoEstavel.ultimo) gestoEstavel.n++; else { gestoEstavel.ultimo = g; gestoEstavel.n = 1; }
-  if (gestoEstavel.n >= 3) gestoEstavel.valido = g;
+  if (gestoEstavel.n >= QUADROS_GESTO) gestoEstavel.valido = g;
   return gestoEstavel.valido;
 }
 function metricasPostura(L){
@@ -1456,7 +1470,7 @@ function renderConfig(){
   renderPulseiraConfig();
   $("cfNome").value = perfil.nome; $("cfCodigo").value = perfil.codigo;
   $("cfUsarCodigo").checked = DB.config.usarCodigo; $("cfSom").checked = DB.config.som; $("cfBanner").checked = DB.config.banner;
-  $("cfTitulo").checked = DB.config.titulo; $("cfFusao").checked = DB.config.fusao;
+  $("cfTitulo").checked = DB.config.titulo; $("cfFusao").checked = DB.config.fusao; $("cfVelocidade").value = DB.config.velocidade;
   $("cfGestos").innerHTML = Object.entries(GESTOS).map(([k,nome]) => `<label class="field">${nome}<select data-gesto="${k}">${Object.entries(ACOES).map(([a,an]) => `<option value="${a}" ${perfil.gestos[k]===a?"selected":""}>${an}</option>`).join("")}</select></label>`).join("");
   $("cfOpcoes").innerHTML = perfil.opcoes.map((o,i) => `<label class="field">Opção ${i+1}<input type="text" maxlength="12" data-opcao="${i}" value="${esc(o)}"></label>`).join("");
 }
@@ -1466,6 +1480,7 @@ $("cfUsarCodigo").onchange = e => { DB.config.usarCodigo = e.target.checked; sal
 $("cfSom").onchange = e => { DB.config.som = e.target.checked; salvar(); if (e.target.checked) beep(660); };
 $("cfBanner").onchange = e => { DB.config.banner = e.target.checked; salvar(); };
 $("cfTitulo").onchange = e => { DB.config.titulo = e.target.checked; salvar(); };
+$("cfVelocidade").onchange = e => { DB.config.velocidade = e.target.value; salvar(); aplicarVelocidade(); };
 $("cfFusao").onchange = e => { DB.config.fusao = e.target.checked; salvar(); atualizarChipModelo(); };
 $("cfGestos").addEventListener("change", e => { const s = e.target.closest("[data-gesto]"); if (!s) return; perfil.gestos[s.dataset.gesto] = s.value; salvar(); renderGuiaAluno(); });
 $("cfOpcoes").addEventListener("input", e => { const s = e.target.closest("[data-opcao]"); if (!s) return; perfil.opcoes[+s.dataset.opcao] = s.value.toUpperCase().slice(0,12); salvar(); });
@@ -1520,7 +1535,8 @@ if (DB.config.vibraVer !== 2){ DB.config.vibra = {...VIBRA_PADRAO}; DB.config.vi
 DB.config.vibra = Object.assign({...VIBRA_PADRAO}, DB.config.vibra);
 DB.config.pbNome = DB.config.pbNome || "Pulseira-VV";
 DB.config.pbServico = DB.config.pbServico || PULSEIRA_SERVICO_PADRAO;
-const INTERVALO_MESMO_SINAL = 15, INTERVALO_QUALQUER = 4;   // segundos
+let INTERVALO_MESMO_SINAL = 6, INTERVALO_QUALQUER = 1.5;   // segundos (ajustados pela velocidade de resposta)
+aplicarVelocidade();
 const pulseira = {dev:null, carac:null, estado:"desligada", ult:{}, ultT:-99, ultVezes:0, tentativas:0, manual:false};
 const uuidOk = u => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(u.trim());
 function estadoPulseira(e, msg){

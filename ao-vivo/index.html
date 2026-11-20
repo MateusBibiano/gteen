@@ -759,6 +759,8 @@ function desenharReal(t, info){
 }
 // fora de molduras: liga a câmera e transmite; dentro do Canva: recebe a transmissão
 if (!dentroDeMoldura && location.hash !== "#sim" && location.hash !== "#auto") setTimeout(ligarCamera, 300);
+// dentro do Canva (ou com #sim): a demonstração roda sozinha, sem apertar botões
+setTimeout(() => { if ((dentroDeMoldura || location.hash === "#sim") && !auto && !REAL) $("btnAuto").click(); }, 400);
 
 
 
@@ -1027,7 +1029,8 @@ const ROTEIRO = [[0,()=>{setEmo("calma"); gesto=null; marcarGesto();}],[3,()=>se
 let auto = false, autoT0 = 0, autoI = 0;
 function passoAuto(t){
   const tt = t - autoT0;
-  while (autoI < ROTEIRO.length && tt >= ROTEIRO[autoI][0]){ const f = ROTEIRO[autoI][1]; if (f) f(); else { autoT0 = t; autoI = -1; } autoI++; }
+  while (autoI < ROTEIRO.length && tt >= ROTEIRO[autoI][0]){ const f = ROTEIRO[autoI][1]; if (f){ f(); autoI++; } else { autoT0 = t; autoI = 0; break; } }
+  if (autoI >= ROTEIRO.length){ autoT0 = t; autoI = 0; }
 }
 function pararAuto(){ if (!auto) return; auto = false; $("btnAuto").setAttribute("aria-pressed","false"); $("btnAuto").textContent = "▶ Demo"; }
 $("btnAuto").onclick = () => {

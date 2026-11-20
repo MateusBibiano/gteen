@@ -37,6 +37,8 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1
 .auto.pb-erro{background:#8a2a2a;border-color:#8a2a2a;color:#fff}
 .auto.vibra{animation:vibra .09s linear 6}
 @keyframes vibra{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+.pill.ponte{background:rgba(255,255,255,.06);color:#9fb0c8}
+.pill.ponte.on{background:rgba(63,208,138,.16);color:#7ee2b0}
 .auto.cam-on{background:#0f7a4a;border-color:#0f7a4a;color:#fff}
 .auto[aria-pressed="true"]{background:var(--azul2);color:#fff;border-color:var(--azul2)}
 button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
@@ -97,6 +99,7 @@ canvas#chart{width:100%;flex:1;min-height:0;display:block}
     <h1>Solução da Equipe GTEeN</h1>
     <span class="pill">Aluno A01</span>
     <div class="sp"></div>
+    <span class="pill ponte" id="ponte">📡</span>
     <button class="auto" id="btnPb">⌚ Conectar pulseira</button>
     <button class="auto" id="btnCam" aria-pressed="false">📷 Usar câmera real</button>
     <button class="auto" id="btnAuto" aria-pressed="false">▶ Demonstração automática</button>
@@ -382,6 +385,9 @@ let fps = 30, fpsN = 0, fpsT = 0, ultEsc = "", escDesde = 0, escReg = false, gAn
 let tAnt = performance.now();
 function loop(now){
   requestAnimationFrame(loop);
+  if (!document.hidden) passo(now);
+}
+function passo(now){
   const dt = Math.min(0.1, (now - tAnt)/1000); tAnt = now;
   const t = tS();
   fpsN++; if (t - fpsT > 1){ fps = Math.round(fpsN/(t-fpsT)); if (fps > 31) fps = 30; fpsT = t; fpsN = 0; }
@@ -410,16 +416,18 @@ function loop(now){
   maoVisE += ((gesto === "DOIS" ? 1 : 0) - maoVisE) * Math.min(1, dt*3.5);
 
   // emoção
-  if (REAL) processarReal(t);
-  const pr = REAL ? real.pr : probs(F); let im = 0; pr.forEach((v,i) => { if (v > pr[im]) im = i; });
+  if (REAL && !usaProcessador) processarReal(t);
+  VIVO = REAL || (t < remoto.ate);
+  if (REAL) transmitir(t);
+  const pr = VIVO ? real.pr : probs(F); let im = 0; pr.forEach((v,i) => { if (v > pr[im]) im = i; });
   const cand = pr[im] < 0.58 ? "calma" : CLASSES[im];
   if (cand !== est.cand){ est.cand = cand; est.desde = t; }
   const precisa = est.cand === "calma" ? 0.8 : 1.4;
   if (est.cand !== est.conf && t - est.desde >= precisa && (est.cand === "calma" || t - est.ult >= 2.2)){ est.conf = est.cand; est.ult = t; flash("mEmo"); }
 
   // gestos efetivos (mão visível)
-  const gEf = REAL ? real.g : maoVisD > 0.8 ? ({ABERTA:"ABERTA", V:"V", POLEGAR:"POLEGAR", ESCOLHER:"ESCOLHER"})[gesto] || null : null;
-  const baixa = REAL ? real.baixa : F.h > 0.6, atencaoEmo = ["tristeza","medo","raiva"].includes(est.conf);
+  const gEf = VIVO ? real.g : maoVisD > 0.8 ? ({ABERTA:"ABERTA", V:"V", POLEGAR:"POLEGAR", ESCOLHER:"ESCOLHER"})[gesto] || null : null;
+  const baixa = VIVO ? real.baixa : F.h > 0.6, atencaoEmo = ["tristeza","medo","raiva"].includes(est.conf);
   const ativos = {ABERTA: gEf==="ABERTA", V: gEf==="V", ESCOLHER: gEf==="ESCOLHER", BAIXA: baixa, EMO: atencaoEmo, COMB: baixa && atencaoEmo};
   for (const c in cont) cont[c] = ativos[c] ? Math.min(cont[c] + dt, LIM[c]) : Math.max(0, cont[c] - 2*dt);
   let info = conduta(gEf, baixa, est.conf);
@@ -440,7 +448,7 @@ function loop(now){
 
   // indicadores
   const P = Object.fromEntries(CLASSES.map((c,i) => [c, pr[i]]));
-  const att = REAL ? real.att : baixa ? 0 : (0.92 + Math.sin(t*0.7)*0.08);
+  const att = VIVO ? real.att : baixa ? 0 : (0.92 + Math.sin(t*0.7)*0.08);
   const val = clamp01(P.alegria + 0.5*P.surpresa + 0.6*P.calma), ten = clamp01(P.raiva + P.medo);
   const eng = clamp01(0.45*att + 0.30*val + 0.15*(baixa?0:1) + 0.10*(1-ten));
   acc.n++; acc.eng += eng; acc.att += att; acc.ten += ten; acc.emo[est.conf] = (acc.emo[est.conf]||0)+1;
@@ -453,7 +461,8 @@ function loop(now){
     desenharGrafico(t);
   }
 
-  if (REAL) desenharReal(t, info); else desenharCamera(t, info);
+  if (VIVO) desenharReal(t, info); else desenharCamera(t, info);
+  atualizarPonte(t);
 
   // painel
   $("cdSq").style.background = info.cor; $("cdBar").style.background = info.cor;
@@ -463,11 +472,11 @@ function loop(now){
   if (setT("emoV", NOME_P[est.conf])) $("emoDot").style.background = COR[est.conf];
   const ped = info.escolha ? "ESCOLHA" : ({ABERTA:"AJUDA", V:"PAUSA", POLEGAR:"OK", ESCOLHER:"ESCOLHA"})[gEf] || "NENHUM";
   if (setT("pedV", ped)) flash("mPed");
-  const post = REAL ? real.post : baixa ? "CABEÇA BAIXA" : gesto === "DOIS" && maoVisD > 0.8 ? "BRAÇOS ERGUIDOS" : (gesto === "BRACO" && maoVisD > 0.8) ? "BRAÇO ERGUIDO" : "NEUTRA";
+  const post = VIVO ? real.post : baixa ? "CABEÇA BAIXA" : gesto === "DOIS" && maoVisD > 0.8 ? "BRAÇOS ERGUIDOS" : (gesto === "BRACO" && maoVisD > 0.8) ? "BRAÇO ERGUIDO" : "NEUTRA";
   if (setT("posV", post)) flash("mPos");
   if (setT("attV", att > 0.5 ? "OLHANDO" : "DISPERSO")) flash("mAtt");
   setT("tenV", Math.round(ten*100) + "%");
-  setT("blkV", (REAL ? real.piscadas() : 15 + Math.round(Math.sin(t*0.1)*2)) + "/min");
+  setT("blkV", (VIVO ? (REAL ? real.piscadas() : remoto.k) : 15 + Math.round(Math.sin(t*0.1)*2)) + "/min");
   if (!loop._u || now - loop._u > 70){ loop._u = now;
     CLASSES.forEach((c,i) => { $("pb_"+c).style.width = (pr[i]*100).toFixed(0)+"%"; $("pv_"+c).textContent = Math.round(pr[i]*100)+"%"; });
   }
@@ -530,6 +539,11 @@ const video = document.createElement("video"); video.muted = true; video.playsIn
 let det = null, ultimoVideoT = -1;
 function aviso(html){ const a = $("aviso"); if (!html){ a.hidden = true; a.innerHTML = ""; } else { a.hidden = false; a.innerHTML = html; } }
 const dentroDeMoldura = (() => { try { return window.self !== window.top; } catch(e){ return true; } })();
+function avisoCanva(){
+  aviso("<b>Para a câmera aparecer aqui no Canva</b><small>Antes de apresentar, abra no Google Chrome a página <b>mateusbibiano.github.io/gteen/ao-vivo</b>, permita a câmera e conecte a pulseira lá. Depois volte para o Canva e apresente: este slide mostra a câmera ao vivo sozinho.</small><button id='avisoOk'>Entendi</button>");
+  $("avisoOk").onclick = () => aviso(null);
+}
+let silencioso = false;
 async function ligarCamera(){
   const b = $("btnCam");
   if (REAL){ desligarCamera(); return; }
@@ -556,7 +570,7 @@ async function ligarCamera(){
              pose: await criar(vision.PoseLandmarker, MODELO.pose, {numPoses:1})};
     }
     real.base = null; real.amostras = []; real.baseCab = null; real.amostrasCab = [];
-    REAL = true; aviso(null);
+    REAL = true; aviso(null); iniciarLeitor(stream);
     b.disabled = false; b.textContent = "■ Voltar à simulação"; b.classList.add("cam-on");
     $("bEmo").style.opacity = $("bGes").style.opacity = ".35"; $("bEmo").style.pointerEvents = $("bGes").style.pointerEvents = "none";
     evento("Câmera real ligada · calibrando rosto neutro", "#4cc38a");
@@ -566,11 +580,11 @@ async function ligarCamera(){
     b.disabled = false; b.textContent = "📷 Usar câmera real";
     const negado = e.name === "NotAllowedError" || e.name === "SecurityError" || e.name === "Bloqueado";
     let msg;
-    if (negado && dentroDeMoldura) msg = "<b>O aplicativo da apresentação não liberou a câmera para este quadro.</b><small>Clique abaixo para abrir a mesma tela, com câmera, numa aba ao lado. Depois é só voltar para a apresentação.</small><a href='" + SITE_CAMERA + "' target='_blank' rel='noopener'>📷 Abrir com câmera</a>";
+    if (dentroDeMoldura){ ligarPonte(); if (!silencioso) avisoCanva(); return; }
     else if (negado) msg = "<b>A câmera foi bloqueada.</b><small>Clique no cadeado ao lado do endereço, permita a câmera e tente de novo. Use o Google Chrome ou o Microsoft Edge.</small>";
     else if (e.name === "NotFoundError") msg = "<b>Nenhuma câmera encontrada.</b><small>Conecte uma webcam e tente de novo.</small>";
     else if (e.name === "NotReadableError") msg = "<b>A câmera está em uso por outro programa.</b><small>Feche o Meet, Zoom ou Teams e tente de novo.</small>";
-    else msg = "<b>Não foi possível carregar a inteligência artificial.</b><small>Verifique a internet. Se estiver dentro da apresentação, abra a tela numa aba:</small><a href='" + SITE_CAMERA + "' target='_blank' rel='noopener'>📷 Abrir com câmera</a>";
+    else msg = "<b>Não foi possível carregar a inteligência artificial.</b><small>Verifique a internet e tente de novo.</small>";
     aviso(msg + "<button id='avisoOk'>Continuar na simulação</button>");
     $("avisoOk").onclick = () => aviso(null);
   }
@@ -583,7 +597,7 @@ function desligarCamera(){
   real.g = null; real.baixa = false; real.pr = [0,1,0,0,0,0];
   evento("Voltou para a simulação", "#687b98");
 }
-$("btnCam").onclick = ligarCamera;
+$("btnCam").onclick = () => { if (dentroDeMoldura && !REAL){ if (tS() < remoto.ate) return; return avisoCanva(); } ligarCamera(); };
 
 // geometria: vídeo "cover" no quadro 1280x720, espelhado
 function geo(){ const vw = video.videoWidth || 1280, vh = video.videoHeight || 720, s = Math.max(W/vw, H/vh); return {dw:vw*s, dh:vh*s, ox:(W-vw*s)/2, oy:(H-vh*s)/2}; }
@@ -600,15 +614,20 @@ function gestoMao(L){
   if (pol && !ind && !med && !ane && !min) return "POLEGAR";
   return null;
 }
-function processarReal(t){
-  if (!det || video.readyState < 2) return;
-  if (video.currentTime === ultimoVideoT) return;
-  ultimoVideoT = video.currentTime;
-  const ms = performance.now();
+let ultimoMs = 0;
+function processarReal(t, quadro){
+  if (!det) return;
+  if (!quadro){
+    if (video.readyState < 2) return;
+    if (video.currentTime === ultimoVideoT) return;
+    ultimoVideoT = video.currentTime;
+  }
+  const fonte = quadro || video;
+  let ms = performance.now(); if (ms <= ultimoMs) ms = ultimoMs + 1; ultimoMs = ms;
   try {
-    real.face = det.face.detectForVideo(video, ms);
-    real.hand = det.hand.detectForVideo(video, ms);
-    real.pose = det.pose.detectForVideo(video, ms);
+    real.face = det.face.detectForVideo(fonte, ms);
+    real.hand = det.hand.detectForVideo(fonte, ms);
+    real.pose = det.pose.detectForVideo(fonte, ms);
   } catch(e){ console.warn(e); return; }
   // ---- emoção (coeficientes do rosto, relativos ao rosto neutro calibrado) ----
   const fl = real.face.faceLandmarks?.[0];
@@ -662,25 +681,41 @@ const LABIOS = [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,
 const OLHO_E = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246], OLHO_D = [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466];
 const SOB_E = [70,63,105,66,107], SOB_D = [300,293,334,296,336];
 const POSE_CON = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[15,17],[15,19],[16,18],[16,20]];
-function desenharReal(t, info){
+// pontos já convertidos para o quadro 1280x720 (espelhado)
+function pontosLocais(){
   const g = geo();
-  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
-  ctx.drawImage(video, g.ox, g.oy, g.dw, g.dh);
-  ctx.restore();
+  const P = real.pose?.landmarks?.[0], fl = real.face?.faceLandmarks?.[0];
+  const maos = (real.hand?.landmarks || []).map(L => L.map(p => mp(p, g)));
+  const iEsc = real.g === "ESCOLHER" && real.maoL ? (real.hand?.landmarks || []).indexOf(real.maoL) : -1;
+  return {F: fl ? fl.map(p => mp(p, g)) : null, M: maos, esc: iEsc,
+          P: P ? P.map(p => mp(p, g)) : null, Pv: P ? P.map(p => (p.visibility ?? 1) > 0.5) : null};
+}
+function desenharReal(t, info){
+  let pts;
+  if (REAL){
+    const g = geo();
+    ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
+    ctx.drawImage(video, g.ox, g.oy, g.dw, g.dh);
+    ctx.restore();
+    pts = pontosLocais();
+  } else {
+    if (remoto.img && remoto.img.complete && remoto.img.naturalWidth) ctx.drawImage(remoto.img, 0, 0, W, H);
+    else { const gr = ctx.createLinearGradient(0,0,0,H); gr.addColorStop(0,"#1b2433"); gr.addColorStop(1,"#0d131d"); ctx.fillStyle = gr; ctx.fillRect(0,0,W,H); }
+    pts = remoto.pts;
+  }
   ctx.fillStyle = "rgba(5,10,18,.25)"; ctx.fillRect(0,0,W,H);
   ctx.lineCap = "round"; ctx.lineJoin = "round";
   // corpo
-  const P = real.pose?.landmarks?.[0];
-  if (P){
-    const Q = P.map(p => mp(p, g)), ok = i => (P[i].visibility ?? 1) > 0.5;
+  if (pts.P){
+    const Q = pts.P, ok = i => pts.Pv[i];
     ctx.strokeStyle = "#1469be"; ctx.lineWidth = 5; ctx.beginPath();
     for (const [a,b] of POSE_CON){ if (ok(a) && ok(b)){ ctx.moveTo(Q[a].x,Q[a].y); ctx.lineTo(Q[b].x,Q[b].y); } } ctx.stroke();
     pontos([11,12,13,14,15,16].filter(ok).map(i => Q[i]), "#78d2f5", 8);
   }
   // rosto
-  const fl = real.face?.faceLandmarks?.[0];
-  if (fl){
-    const F2 = fl.map(p => mp(p, g));
+  const F2 = pts.F;
+  if (F2){
+    const fl = F2;
     pontos(F2.filter((_,i) => i % 2 === 0), "rgba(0,255,110,.5)", 1.6);
     const verde = "rgba(0,255,110,.9)";
     linha(FACE_OVAL.map(i => F2[i]), true, "rgba(0,255,110,.5)", 1.6);
@@ -690,13 +725,12 @@ function desenharReal(t, info){
   }
   // mãos
   ultimoFrame.dedoIndicador = null;
-  for (const L of real.hand?.landmarks || []){
-    const M = L.map(p => mp(p, g));
+  pts.M.forEach((M, iM) => {
     ctx.strokeStyle = "#3c78ff"; ctx.lineWidth = 3; ctx.beginPath();
     for (const [a,b] of CONEX_MAO){ ctx.moveTo(M[a].x,M[a].y); ctx.lineTo(M[b].x,M[b].y); } ctx.stroke();
     pontos(M, "#6aa0ff", 5.5); pontos([M[0]], "#ffffff", 4);
-    if (L === real.maoL && real.g === "ESCOLHER"){ ultimoFrame.dedoIndicador = M[8]; ctx.fillStyle = "#ffff00"; ctx.beginPath(); ctx.arc(M[8].x, M[8].y, 11, 0, Math.PI*2); ctx.fill(); }
-  }
+    if (iM === pts.esc){ ultimoFrame.dedoIndicador = M[8]; ctx.fillStyle = "#ffff00"; ctx.beginPath(); ctx.arc(M[8].x, M[8].y, 11, 0, Math.PI*2); ctx.fill(); }
+  });
   // opções de escolha
   if (info.conduta === "ABRIR OPÇÕES"){
     rr(14, H-250, W-28, 192, 26, "rgba(255,255,255,.88)");
@@ -710,15 +744,165 @@ function desenharReal(t, info){
     rr(16,16,W-32,64,18, aj ? "#e5403f" : "#ee7d2b"); txt(aj ? "ATENÇÃO: AJUDA" : "ATENÇÃO: PAUSA", 40, 60, 32, "#fff", 800);
   } else {
     ctx.fillStyle = (t%1.2)<0.7 ? "#ff5a5f" : "rgba(255,90,95,.3)"; ctx.beginPath(); ctx.arc(34,34,9,0,Math.PI*2); ctx.fill();
-    ctx.font = `700 20px ui-monospace,Menlo,Consolas,monospace`; ctx.fillStyle = "#ffb3b5"; ctx.fillText("CÂMERA REAL · 478 + 21 + 33 pontos", 52, 41);
+    ctx.font = `700 20px ui-monospace,Menlo,Consolas,monospace`; ctx.fillStyle = "#ffb3b5"; ctx.fillText((REAL ? "CÂMERA REAL" : "CÂMERA AO VIVO") + " · 478 + 21 + 33 pontos", 52, 41);
   }
-  const chips = [`${fps} fps`, real.rosto ? "rosto detectado" : "procurando rosto", real.mao ? "mão detectada" : "sem mão", real.base ? "rosto calibrado" : "calibrando…", "sem gravar imagem"];
+  const R = REAL ? real : remoto;
+  const chips = [`${REAL ? fps : remoto.fps} fps`, R.rosto ? "rosto detectado" : "procurando rosto", R.mao ? "mão detectada" : "sem mão", (REAL ? real.base : remoto.base) ? "rosto calibrado" : "calibrando…", "sem gravar imagem"];
   let x = 18; ctx.font = `700 19px ui-monospace,Menlo,Consolas,monospace`;
   for (const c of chips){ const w = ctx.measureText(c).width + 26; rr(x, H-44, w, 30, 15, "rgba(8,14,24,.78)"); ctx.fillStyle = "#dfe9f7"; ctx.fillText(c, x+13, H-23); x += w + 8; }
 }
-// começa direto com a câmera real (use #sim para abrir só a simulação)
-if (location.hash !== "#sim" && location.hash !== "#auto") setTimeout(ligarCamera, 300);
+// fora de molduras: liga a câmera e transmite; dentro do Canva: recebe a transmissão
+if (dentroDeMoldura) setTimeout(ligarPonte, 200);
+else if (location.hash !== "#sim" && location.hash !== "#auto") setTimeout(ligarCamera, 300);
 
+
+
+// ================= PONTE COM O CANVA =================
+// O Canva não libera a câmera dentro do slide. Esta página, aberta numa guia do Chrome,
+// usa a câmera e a pulseira e envia os pontos, a imagem reduzida e as leituras para o slide,
+// por uma conexão criptografada (wss) num canal com nome aleatório. Nada é gravado.
+let VIVO = false, usaProcessador = false;
+const CANAL = "gteen-vv/" + "q7m2x9k4tz";
+const BROKERS = (new URLSearchParams(location.search).get("broker") || "wss://broker.hivemq.com:8884/mqtt,wss://broker.emqx.io:8084/mqtt").split(",");
+const remoto = {ate:-1, pts:{F:null, M:[], P:null, Pv:null, esc:-1}, img:null, fps:0, k:0, rosto:false, mao:false, base:false, seq:-1, pb:false, ultT:-1, conectado:false};
+class MiniMQTT {
+  constructor(url, aoMsg, aoEstado){ this.url = url; this.aoMsg = aoMsg; this.aoEstado = aoEstado || (()=>{}); this.ok = false; this.buf = new Uint8Array(0); this.topicos = []; this.abrir(); }
+  abrir(){
+    try { this.ws = new WebSocket(this.url, "mqtt"); } catch(e){ return this.tentarDeNovo(); }
+    this.ws.binaryType = "arraybuffer";
+    this.ws.onopen = () => {
+      const id = "gteen" + Math.random().toString(36).slice(2, 12);
+      this.enviar(0x10, [...this.str("MQTT"), 4, 0x02, 0, 60, ...this.str(id)]);
+    };
+    this.ws.onmessage = e => this.receber(new Uint8Array(e.data));
+    this.ws.onclose = () => { this.ok = false; clearInterval(this.ping); this.aoEstado(false); this.tentarDeNovo(); };
+    this.ws.onerror = () => {};
+  }
+  tentarDeNovo(){ clearTimeout(this.rt); this.rt = setTimeout(() => this.abrir(), 3000); }
+  str(t){ const b = new TextEncoder().encode(t); return [b.length >> 8, b.length & 255, ...b]; }
+  enviar(tipo, corpo){
+    if (!this.ws || this.ws.readyState !== 1) return false;
+    const len = []; let n = corpo.length; do { let d = n % 128; n = Math.floor(n / 128); if (n > 0) d |= 128; len.push(d); } while (n > 0);
+    const pkt = new Uint8Array(1 + len.length + corpo.length); pkt[0] = tipo; pkt.set(len, 1); pkt.set(corpo, 1 + len.length);
+    this.ws.send(pkt); return true;
+  }
+  assinar(topico){ this.topicos.push(topico); if (this.ok) this.enviar(0x82, [0, 1, ...this.str(topico), 0]); }
+  publicar(topico, texto){
+    if (!this.ok || this.ws.bufferedAmount > 400000) return false;
+    const t = this.str(topico), d = new TextEncoder().encode(texto);
+    const corpo = new Uint8Array(t.length + d.length); corpo.set(t, 0); corpo.set(d, t.length);
+    return this.enviar(0x30, corpo);
+  }
+  receber(dados){
+    const b = new Uint8Array(this.buf.length + dados.length); b.set(this.buf); b.set(dados, this.buf.length); this.buf = b;
+    while (this.buf.length >= 2){
+      let mult = 1, len = 0, i = 1, d;
+      do { if (i >= this.buf.length) return; d = this.buf[i++]; len += (d & 127) * mult; mult *= 128; } while (d & 128);
+      if (this.buf.length < i + len) return;
+      const tipo = this.buf[0] >> 4, qos = (this.buf[0] >> 1) & 3, corpo = this.buf.subarray(i, i + len);
+      this.buf = this.buf.slice(i + len);
+      if (tipo === 2){ this.ok = corpo[1] === 0; if (this.ok){ this.aoEstado(true); this.topicos.forEach(tp => this.enviar(0x82, [0, 1, ...this.str(tp), 0])); clearInterval(this.ping); this.ping = setInterval(() => this.enviar(0xC0, []), 25000); } }
+      else if (tipo === 3){ const tl = (corpo[0] << 8) | corpo[1]; const topico = new TextDecoder().decode(corpo.subarray(2, 2 + tl)); const ini = 2 + tl + (qos ? 2 : 0); this.aoMsg(topico, new TextDecoder().decode(corpo.subarray(ini))); }
+    }
+  }
+}
+let clientes = [];
+function conectarBrokers(assinar){
+  if (clientes.length) return;
+  clientes = BROKERS.map(u => new MiniMQTT(u, aoReceber, () => atualizarPill()));
+  if (assinar) clientes.forEach(c => c.assinar(CANAL));
+}
+// ---- lado da câmera: envia ----
+const miniatura = document.createElement("canvas"); miniatura.width = 480; miniatura.height = 270;
+const mctx = miniatura.getContext("2d");
+let ultEnvio = -1, seqEnvio = 0, fpsEnvio = 0, nEnvio = 0, tEnvio = 0, ultimoQuadroBmp = null;
+const arred = v => Math.round(v);
+function compactar(lista){ const a = []; for (const p of lista) a.push(arred(p.x), arred(p.y)); return a; }
+function transmitir(t){
+  if (!clientes.length || !clientes.some(c => c.ok)) return;
+  if (t - ultEnvio < 0.11) return;
+  ultEnvio = t;
+  const pts = pontosLocais();
+  // imagem reduzida (espelhada, como na tela)
+  let img = "";
+  try {
+    const g = geo(), s = 480 / W;
+    mctx.save(); mctx.translate(480, 0); mctx.scale(-1, 1);
+    mctx.drawImage(ultimoQuadroBmp || video, g.ox*s, g.oy*s, g.dw*s, g.dh*s); mctx.restore();
+    img = miniatura.toDataURL("image/jpeg", 0.5);
+  } catch(e){}
+  nEnvio++; if (t - tEnvio > 1){ fpsEnvio = Math.round(nEnvio / (t - tEnvio)); nEnvio = 0; tEnvio = t; }
+  const msg = JSON.stringify({s: seqEnvio++, pr: real.pr.map(v => +v.toFixed(3)), g: real.g, b: real.baixa ? 1 : 0, a: +real.att.toFixed(2), p: real.post,
+    k: real.piscadas(), r: real.rosto ? 1 : 0, m: real.mao ? 1 : 0, c: real.base ? 1 : 0, f: fpsEnvio, pb: pb.carac ? 1 : 0,
+    F: pts.F ? compactar(pts.F) : null, M: pts.M.map(compactar), e: pts.esc, P: pts.P ? compactar(pts.P) : null, V: pts.Pv ? pts.Pv.map(v => v ? 1 : 0) : null, i: img});
+  clientes.forEach(c => c.publicar(CANAL, msg));
+}
+// ---- lado do Canva: recebe ----
+const expandir = a => { const r = []; for (let i = 0; i < a.length; i += 2) r.push({x: a[i], y: a[i+1]}); return r; };
+function aoReceber(topico, texto){
+  let d; try { d = JSON.parse(texto); } catch(e){ return; }
+  if (REAL) return;
+  if (d.s <= remoto.seq && d.s > remoto.seq - 1000) return;   // repetida (chega pelos dois servidores)
+  remoto.seq = d.s;
+  const t = tS();
+  if (remoto.ate < t) evento("📡 Câmera ao vivo conectada", "#4cc38a");
+  remoto.ate = t + 4;
+  real.pr = d.pr; real.g = d.g; real.baixa = !!d.b; real.att = d.a; real.post = d.p;
+  Object.assign(remoto, {k: d.k, rosto: !!d.r, mao: !!d.m, base: !!d.c, fps: d.f, pb: !!d.pb});
+  remoto.pts = {F: d.F ? expandir(d.F) : null, M: (d.M || []).map(expandir), esc: d.e, P: d.P ? expandir(d.P) : null, Pv: d.V ? d.V.map(Boolean) : null};
+  if (d.i){ const im = new Image(); im.onload = () => { remoto.img = im; }; im.src = d.i; }
+}
+function ligarPonte(){ conectarBrokers(true); atualizarPill(); }
+let pillEstado = "";
+function atualizarPill(){
+  const el = $("ponte"); if (!el) return;
+  let e;
+  if (REAL) e = clientes.some(c => c.ok) ? "📡 enviando para o Canva" : "📡 conectando…";
+  else if (tS() < remoto.ate) e = "📡 câmera ao vivo";
+  else if (clientes.some(c => c.ok)) e = "📡 aguardando a câmera";
+  else e = "📡 conectando…";
+  if (e !== pillEstado){ pillEstado = e; el.textContent = e; el.classList.toggle("on", e.includes("ao vivo") || e.includes("enviando")); }
+}
+let ultPonte = 0;
+function atualizarPonte(t){
+  if (t - ultPonte < 0.5) return; ultPonte = t;
+  atualizarPill();
+  if (!REAL){
+    const ap = t < remoto.ate;
+    $("bEmo").style.opacity = $("bGes").style.opacity = ap ? ".35" : ""; $("bEmo").style.pointerEvents = $("bGes").style.pointerEvents = ap ? "none" : "";
+    if (ap){ pararAuto(); if (gesto){ gesto = null; marcarGesto(); } }
+  }
+  if (!REAL && dentroDeMoldura){
+    const b = $("btnPb");
+    const txt = t < remoto.ate ? (remoto.pb ? "⌚ Pulseira conectada" : "⌚ Pulseira desligada") : "⌚ Pulseira";
+    if (b.textContent !== txt){ b.textContent = txt; b.classList.toggle("pb-on", remoto.pb && t < remoto.ate); }
+  }
+  if (t > remoto.ate && remoto.ate > 0 && !REAL){ remoto.ate = -1; evento("📡 Transmissão da câmera parou", "#687b98"); }
+}
+// ---- leitura de quadros que continua com a guia escondida ----
+async function iniciarLeitor(stream){
+  conectarBrokers(false);
+  if (!("MediaStreamTrackProcessor" in window)) return;
+  try {
+    const track = stream.getVideoTracks()[0];
+    const reader = new MediaStreamTrackProcessor({track}).readable.getReader();
+    usaProcessador = true;
+    (async () => {
+      while (REAL){
+        const {value: quadro, done} = await reader.read();
+        if (done || !quadro) break;
+        try {
+          processarReal(tS(), quadro);
+          if (document.hidden){
+            try { ultimoQuadroBmp && ultimoQuadroBmp.close && ultimoQuadroBmp.close(); ultimoQuadroBmp = await createImageBitmap(quadro); } catch(e){}
+            passo(performance.now());
+          } else if (ultimoQuadroBmp){ ultimoQuadroBmp.close && ultimoQuadroBmp.close(); ultimoQuadroBmp = null; }
+        } finally { quadro.close(); }
+      }
+      usaProcessador = false;
+    })();
+  } catch(e){ console.warn("leitor de quadros:", e); usaProcessador = false; }
+}
 
 // ================= PULSEIRA (Bluetooth) =================
 const PB_SERVICO = "7a0b1000-5c1e-4b7a-9f3e-0d2a6c8e4f10", PB_CARAC = "7a0b1001-5c1e-4b7a-9f3e-0d2a6c8e4f10";
@@ -738,6 +922,7 @@ function avisoPb(titulo, texto, link){
   $("avisoOk").onclick = () => aviso(null);
 }
 async function conectarPb(){
+  if (dentroDeMoldura && !REAL) return avisoPb(tS() < remoto.ate && remoto.pb ? "A pulseira está conectada na página da câmera." : "A pulseira se conecta na página da câmera.", tS() < remoto.ate && remoto.pb ? "Ela vibra sozinha a cada pedido. Não precisa fazer nada aqui." : "Na guia do Chrome com mateusbibiano.github.io/gteen/ao-vivo, clique em ⌚ Conectar pulseira e escolha Pulseira-VV.", false);
   if (pb.carac){ vibrar(1).then(ok => ok && evento("Teste da pulseira · vibrou 1×", "#4cc38a")); return; }
   if (!navigator.bluetooth){
     const safari = /^((?!chrome|android|edg).)*safari/i.test(navigator.userAgent);
@@ -755,7 +940,7 @@ async function conectarPb(){
     if (e.name === "NotFoundError" && /cancel/i.test(e.message)){ estadoPb(pb.carac ? "on" : "off"); return; }
     estadoPb("erro");
     if (e.name === "SecurityError" || /permissions policy|disallowed|not allowed/i.test(e.message))
-      avisoPb("O aplicativo da apresentação não liberou o Bluetooth para este quadro.", "Clique abaixo para abrir a mesma tela numa aba ao lado. Lá, clique em ⌚ Conectar pulseira e escolha Pulseira-VV.", true);
+      avisoPb("O Canva não libera o Bluetooth dentro do slide.", "Conecte a pulseira na página da câmera (mateusbibiano.github.io/gteen/ao-vivo), aberta no Chrome antes de apresentar. Ela vibra mesmo com o Canva em tela cheia.", false);
     else if (e.name === "NotFoundError")
       avisoPb("Nenhuma pulseira encontrada.", "Confira se a pulseira está ligada no cabo USB, perto do computador, e se o Bluetooth do computador está ativado.", false);
     else avisoPb("Não foi possível conectar à pulseira.", (e.message || e) + " — desligue e ligue a pulseira e tente de novo.", dentroDeMoldura);

@@ -28,6 +28,12 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1
 .pill.live i{width:8px;height:8px;border-radius:50%;background:var(--urgente);animation:pisca 1.2s infinite}
 @keyframes pisca{50%{opacity:.25}}
 .auto{font:600 12px var(--f);border:1px solid var(--line);background:var(--card);color:var(--sub);border-radius:9px;padding:7px 11px;cursor:pointer}
+.cam .aviso{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(6,11,20,.88);color:#e8eef8;text-align:center;padding:30px;font:600 16px var(--f)}
+.cam .aviso[hidden]{display:none}
+.cam .aviso b{font-size:20px}
+.cam .aviso a,.cam .aviso button{font:700 15px var(--f);background:#1e6fd9;color:#fff;border:0;border-radius:10px;padding:10px 16px;text-decoration:none;cursor:pointer}
+.cam .aviso small{color:#9fb0c8;font-weight:500;max-width:560px}
+.auto.cam-on{background:#0f7a4a;border-color:#0f7a4a;color:#fff}
 .auto[aria-pressed="true"]{background:var(--azul2);color:#fff;border-color:var(--azul2)}
 button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
 .meio{display:grid;grid-template-columns:812px 1fr;gap:14px;padding:12px 16px 14px;min-height:0}
@@ -87,12 +93,13 @@ canvas#chart{width:100%;flex:1;min-height:0;display:block}
     <h1>Solução da Equipe GTEeN</h1>
     <span class="pill">Aluno A01</span>
     <div class="sp"></div>
+    <button class="auto" id="btnCam" aria-pressed="false">📷 Usar câmera real</button>
     <button class="auto" id="btnAuto" aria-pressed="false">▶ Demonstração automática</button>
     <span class="pill live"><i></i><span id="relogio">00:00</span></span>
   </div>
   <div class="meio">
     <div class="esq">
-      <div class="cam"><canvas id="cv" width="1280" height="720" aria-label="Imagem da câmera com os pontos detectados no rosto, nas mãos e no corpo"></canvas></div>
+      <div class="cam"><canvas id="cv" width="1280" height="720" aria-label="Imagem da câmera com os pontos detectados no rosto, nas mãos e no corpo"></canvas><div class="aviso" id="aviso" hidden></div></div>
       <div class="ctrl">
         <span class="t">Emoção</span>
         <div class="row" id="bEmo">
@@ -398,15 +405,16 @@ function loop(now){
   maoVisE += ((gesto === "DOIS" ? 1 : 0) - maoVisE) * Math.min(1, dt*3.5);
 
   // emoção
-  const pr = probs(F); let im = 0; pr.forEach((v,i) => { if (v > pr[im]) im = i; });
+  if (REAL) processarReal(t);
+  const pr = REAL ? real.pr : probs(F); let im = 0; pr.forEach((v,i) => { if (v > pr[im]) im = i; });
   const cand = pr[im] < 0.58 ? "calma" : CLASSES[im];
   if (cand !== est.cand){ est.cand = cand; est.desde = t; }
   const precisa = est.cand === "calma" ? 0.8 : 1.4;
   if (est.cand !== est.conf && t - est.desde >= precisa && (est.cand === "calma" || t - est.ult >= 2.2)){ est.conf = est.cand; est.ult = t; flash("mEmo"); }
 
   // gestos efetivos (mão visível)
-  const gEf = maoVisD > 0.8 ? ({ABERTA:"ABERTA", V:"V", POLEGAR:"POLEGAR", ESCOLHER:"ESCOLHER"})[gesto] || null : null;
-  const baixa = F.h > 0.6, atencaoEmo = ["tristeza","medo","raiva"].includes(est.conf);
+  const gEf = REAL ? real.g : maoVisD > 0.8 ? ({ABERTA:"ABERTA", V:"V", POLEGAR:"POLEGAR", ESCOLHER:"ESCOLHER"})[gesto] || null : null;
+  const baixa = REAL ? real.baixa : F.h > 0.6, atencaoEmo = ["tristeza","medo","raiva"].includes(est.conf);
   const ativos = {ABERTA: gEf==="ABERTA", V: gEf==="V", ESCOLHER: gEf==="ESCOLHER", BAIXA: baixa, EMO: atencaoEmo, COMB: baixa && atencaoEmo};
   for (const c in cont) cont[c] = ativos[c] ? Math.min(cont[c] + dt, LIM[c]) : Math.max(0, cont[c] - 2*dt);
   let info = conduta(gEf, baixa, est.conf);
@@ -427,7 +435,7 @@ function loop(now){
 
   // indicadores
   const P = Object.fromEntries(CLASSES.map((c,i) => [c, pr[i]]));
-  const att = baixa ? 0 : (0.92 + Math.sin(t*0.7)*0.08);
+  const att = REAL ? real.att : baixa ? 0 : (0.92 + Math.sin(t*0.7)*0.08);
   const val = clamp01(P.alegria + 0.5*P.surpresa + 0.6*P.calma), ten = clamp01(P.raiva + P.medo);
   const eng = clamp01(0.45*att + 0.30*val + 0.15*(baixa?0:1) + 0.10*(1-ten));
   acc.n++; acc.eng += eng; acc.att += att; acc.ten += ten; acc.emo[est.conf] = (acc.emo[est.conf]||0)+1;
@@ -440,7 +448,7 @@ function loop(now){
     desenharGrafico(t);
   }
 
-  desenharCamera(t, info);
+  if (REAL) desenharReal(t, info); else desenharCamera(t, info);
 
   // painel
   $("cdSq").style.background = info.cor; $("cdBar").style.background = info.cor;
@@ -450,11 +458,11 @@ function loop(now){
   if (setT("emoV", NOME_P[est.conf])) $("emoDot").style.background = COR[est.conf];
   const ped = info.escolha ? "ESCOLHA" : ({ABERTA:"AJUDA", V:"PAUSA", POLEGAR:"OK", ESCOLHER:"ESCOLHA"})[gEf] || "NENHUM";
   if (setT("pedV", ped)) flash("mPed");
-  const post = baixa ? "CABEÇA BAIXA" : gesto === "DOIS" && maoVisD > 0.8 ? "BRAÇOS ERGUIDOS" : (gesto === "BRACO" && maoVisD > 0.8) ? "BRAÇO ERGUIDO" : "NEUTRA";
+  const post = REAL ? real.post : baixa ? "CABEÇA BAIXA" : gesto === "DOIS" && maoVisD > 0.8 ? "BRAÇOS ERGUIDOS" : (gesto === "BRACO" && maoVisD > 0.8) ? "BRAÇO ERGUIDO" : "NEUTRA";
   if (setT("posV", post)) flash("mPos");
   if (setT("attV", att > 0.5 ? "OLHANDO" : "DISPERSO")) flash("mAtt");
   setT("tenV", Math.round(ten*100) + "%");
-  setT("blkV", (15 + Math.round(Math.sin(t*0.1)*2)) + "/min");
+  setT("blkV", (REAL ? real.piscadas() : 15 + Math.round(Math.sin(t*0.1)*2)) + "/min");
   if (!loop._u || now - loop._u > 70){ loop._u = now;
     CLASSES.forEach((c,i) => { $("pb_"+c).style.width = (pr[i]*100).toFixed(0)+"%"; $("pv_"+c).textContent = Math.round(pr[i]*100)+"%"; });
   }
@@ -501,6 +509,204 @@ function setGesto(g){
 }
 $("bEmo").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pararAuto(); setEmo(b.dataset.emo); });
 $("bGes").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; pararAuto(); setGesto(b.dataset.g); });
+
+
+// ================= CÂMERA REAL (MediaPipe) =================
+let REAL = false;
+const real = {pr:[0,1,0,0,0,0], g:null, baixa:false, att:1, post:"NEUTRA", face:null, hand:null, pose:null,
+  base:null, amostras:[], baseCab:null, amostrasCab:[], gCand:null, gN:0, blinks:[], olhoFechado:false, rosto:false, mao:false,
+  piscadas(){ const t = tS(); this.blinks = this.blinks.filter(b => t - b < 60); return this.blinks.length; } };
+const MP = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+const MODELO = {face:"https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+  hand:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+  pose:"https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task"};
+const SITE_CAMERA = "https://mateusbibiano.github.io/gteen/ao-vivo/#camera";
+const video = document.createElement("video"); video.muted = true; video.playsInline = true;
+let det = null, ultimoVideoT = -1;
+function aviso(html){ const a = $("aviso"); if (!html){ a.hidden = true; a.innerHTML = ""; } else { a.hidden = false; a.innerHTML = html; } }
+const dentroDeMoldura = (() => { try { return window.self !== window.top; } catch(e){ return true; } })();
+async function ligarCamera(){
+  const b = $("btnCam");
+  if (REAL){ desligarCamera(); return; }
+  pararAuto(); gesto = null; marcarGesto();
+  b.disabled = true; b.textContent = "⏳ Abrindo câmera…";
+  aviso("<b>Abrindo a câmera…</b><small>Se o navegador perguntar, clique em <b>Permitir</b>.</small>");
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) throw Object.assign(new Error("sem getUserMedia"), {name:"Bloqueado"});
+    const stream = await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280}, height:{ideal:720}, facingMode:"user"}, audio:false});
+    video.srcObject = stream; await video.play();
+    if (!det){
+      aviso("<b>Carregando a inteligência artificial…</b><small>Leva alguns segundos na primeira vez.</small>");
+      b.textContent = "⏳ Carregando IA…";
+      const vision = await import(MP + "/vision_bundle.mjs");
+      const fs = await vision.FilesetResolver.forVisionTasks(MP + "/wasm");
+      const criar = async (C, url, extra) => { for (const d of ["GPU","CPU"]) { try { return await C.createFromOptions(fs, {baseOptions:{modelAssetPath:url, delegate:d}, runningMode:"VIDEO", ...extra}); } catch(e){ if (d === "CPU") throw e; } } };
+      det = {face: await criar(vision.FaceLandmarker, MODELO.face, {numFaces:1, outputFaceBlendshapes:true}),
+             hand: await criar(vision.HandLandmarker, MODELO.hand, {numHands:2}),
+             pose: await criar(vision.PoseLandmarker, MODELO.pose, {numPoses:1})};
+    }
+    real.base = null; real.amostras = []; real.baseCab = null; real.amostrasCab = [];
+    REAL = true; aviso(null);
+    b.disabled = false; b.textContent = "■ Voltar à simulação"; b.classList.add("cam-on");
+    $("bEmo").style.opacity = $("bGes").style.opacity = ".35"; $("bEmo").style.pointerEvents = $("bGes").style.pointerEvents = "none";
+    evento("Câmera real ligada · calibrando rosto neutro", "#4cc38a");
+  } catch(e){
+    console.error(e);
+    if (video.srcObject){ video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+    b.disabled = false; b.textContent = "📷 Usar câmera real";
+    const negado = e.name === "NotAllowedError" || e.name === "SecurityError" || e.name === "Bloqueado";
+    let msg;
+    if (negado && dentroDeMoldura) msg = "<b>O aplicativo da apresentação não liberou a câmera para este quadro.</b><small>Clique abaixo para abrir a mesma tela, com câmera, numa aba ao lado. Depois é só voltar para a apresentação.</small><a href='" + SITE_CAMERA + "' target='_blank' rel='noopener'>📷 Abrir com câmera</a>";
+    else if (negado) msg = "<b>A câmera foi bloqueada.</b><small>Clique no cadeado ao lado do endereço, permita a câmera e tente de novo. Use o Google Chrome ou o Microsoft Edge.</small>";
+    else if (e.name === "NotFoundError") msg = "<b>Nenhuma câmera encontrada.</b><small>Conecte uma webcam e tente de novo.</small>";
+    else if (e.name === "NotReadableError") msg = "<b>A câmera está em uso por outro programa.</b><small>Feche o Meet, Zoom ou Teams e tente de novo.</small>";
+    else msg = "<b>Não foi possível carregar a inteligência artificial.</b><small>Verifique a internet. Se estiver dentro da apresentação, abra a tela numa aba:</small><a href='" + SITE_CAMERA + "' target='_blank' rel='noopener'>📷 Abrir com câmera</a>";
+    aviso(msg + "<button id='avisoOk'>Continuar na simulação</button>");
+    $("avisoOk").onclick = () => aviso(null);
+  }
+}
+function desligarCamera(){
+  REAL = false;
+  if (video.srcObject){ video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
+  const b = $("btnCam"); b.textContent = "📷 Usar câmera real"; b.classList.remove("cam-on");
+  $("bEmo").style.opacity = $("bGes").style.opacity = ""; $("bEmo").style.pointerEvents = $("bGes").style.pointerEvents = "";
+  real.g = null; real.baixa = false; real.pr = [0,1,0,0,0,0];
+  evento("Voltou para a simulação", "#687b98");
+}
+$("btnCam").onclick = ligarCamera;
+
+// geometria: vídeo "cover" no quadro 1280x720, espelhado
+function geo(){ const vw = video.videoWidth || 1280, vh = video.videoHeight || 720, s = Math.max(W/vw, H/vh); return {dw:vw*s, dh:vh*s, ox:(W-vw*s)/2, oy:(H-vh*s)/2}; }
+function mp(p, g){ return {x: W - (g.ox + p.x*g.dw), y: g.oy + p.y*g.dh}; }
+const BS = (cats, n) => { const c = cats.find(c => c.categoryName === n); return c ? c.score : 0; };
+const NOMES_BS = ["mouthSmileLeft","mouthSmileRight","jawOpen","browInnerUp","browDownLeft","browDownRight","eyeWideLeft","eyeWideRight","mouthFrownLeft","mouthFrownRight","mouthPressLeft","mouthPressRight","mouthStretchLeft","mouthStretchRight","eyeBlinkLeft","eyeBlinkRight","cheekSquintLeft","cheekSquintRight"];
+function gestoMao(L){
+  const d = (p,a) => L[p].y < L[a].y;
+  const ind=d(8,6), med=d(12,10), ane=d(16,14), min=d(20,18), pol = L[4].y < L[2].y && L[4].y < L[5].y;
+  const n = [pol,ind,med,ane,min].filter(Boolean).length;
+  if (n >= 4) return "ABERTA";
+  if (ind && med && !ane && !min) return "V";
+  if (ind && !med && !ane && !min) return "ESCOLHER";
+  if (pol && !ind && !med && !ane && !min) return "POLEGAR";
+  return null;
+}
+function processarReal(t){
+  if (!det || video.readyState < 2) return;
+  if (video.currentTime === ultimoVideoT) return;
+  ultimoVideoT = video.currentTime;
+  const ms = performance.now();
+  try {
+    real.face = det.face.detectForVideo(video, ms);
+    real.hand = det.hand.detectForVideo(video, ms);
+    real.pose = det.pose.detectForVideo(video, ms);
+  } catch(e){ console.warn(e); return; }
+  // ---- emoção (coeficientes do rosto, relativos ao rosto neutro calibrado) ----
+  const fl = real.face.faceLandmarks?.[0];
+  real.rosto = !!fl;
+  if (fl && real.face.faceBlendshapes?.[0]){
+    const cats = real.face.faceBlendshapes[0].categories;
+    const v = Object.fromEntries(NOMES_BS.map(n => [n, BS(cats, n)]));
+    if (!real.base){ real.amostras.push(v); if (real.amostras.length >= 30){ real.base = Object.fromEntries(NOMES_BS.map(n => [n, real.amostras.reduce((s,a)=>s+a[n],0)/real.amostras.length])); evento("Rosto neutro calibrado", "#4cc38a"); } }
+    const b = real.base || Object.fromEntries(NOMES_BS.map(n => [n, 0]));
+    const r = n => Math.max(0, v[n] - b[n]);
+    const sorriso = (r("mouthSmileLeft")+r("mouthSmileRight"))/2, boca = r("jawOpen"), sobCima = r("browInnerUp");
+    const sobBaixo = (r("browDownLeft")+r("browDownRight"))/2, olhoAb = (r("eyeWideLeft")+r("eyeWideRight"))/2;
+    const triste = (r("mouthFrownLeft")+r("mouthFrownRight"))/2, aperto = (r("mouthPressLeft")+r("mouthPressRight"))/2, estica = (r("mouthStretchLeft")+r("mouthStretchRight"))/2;
+    const S = {alegria: 1.7*sorriso,
+               calma: 0.30,
+               medo: 0.9*sobCima + 0.8*olhoAb + 0.7*estica - 0.6*boca - sorriso,
+               raiva: 1.8*sobBaixo + 0.8*aperto - sorriso,
+               surpresa: boca > 0.25 ? 1.1*boca + 0.7*olhoAb + 0.6*sobCima : 0.3*boca,
+               tristeza: 1.6*triste + 0.5*sobCima*(1-boca) - sorriso};
+    const ex = CLASSES.map(c => Math.exp(7*S[c])), soma = ex.reduce((a,b)=>a+b,0);
+    const alvo = ex.map(e => e/soma);
+    real.pr = real.pr.map((p,i) => p + (alvo[i]-p)*0.35);
+    const fechado = (v.eyeBlinkLeft + v.eyeBlinkRight)/2 > 0.5;
+    if (fechado && !real.olhoFechado) real.blinks.push(t);
+    real.olhoFechado = fechado;
+    // atenção: nariz entre os cantos dos olhos
+    const nx = fl[1].x, e1 = fl[33].x, e2 = fl[263].x, rel = (nx - Math.min(e1,e2)) / (Math.abs(e2-e1) || 1);
+    real.att += ((rel > 0.2 && rel < 0.8 ? 1 : 0) - real.att) * 0.15;
+  } else { real.att += (0 - real.att) * 0.1; real.pr = real.pr.map((p,i) => p + ((i===1?1:0)-p)*0.1); }
+  // ---- gesto (precisa repetir em quadros seguidos) ----
+  let g = null; real.mao = false;
+  for (const L of real.hand.landmarks || []){ real.mao = true; const gg = gestoMao(L); if (gg){ g = gg; real.maoL = L; break; } real.maoL = L; }
+  if (!real.mao) real.maoL = null;
+  if (g === real.gCand) real.gN++; else { real.gCand = g; real.gN = 1; }
+  if (real.gN >= 3) real.g = g;
+  // ---- postura ----
+  const P = real.pose.landmarks?.[0];
+  real.post = "SEM CORPO"; real.baixa = false;
+  if (P){
+    const vis = p => (p.visibility ?? 1) > 0.5;
+    const oE = P[11], oD = P[12], pE = P[15], pD = P[16], nariz = P[0];
+    const coy = (oE.y + oD.y)/2, larg = Math.abs(oE.x - oD.x) || 0.2, cab = (nariz.y - coy)/larg;
+    if (!real.baseCab){ real.amostrasCab.push(cab); if (real.amostrasCab.length >= 30) real.baseCab = real.amostrasCab.reduce((a,b)=>a+b,0)/real.amostrasCab.length; }
+    const bE = vis(pE) && pE.y < oE.y, bD = vis(pD) && pD.y < oD.y;
+    real.baixa = real.baseCab != null && cab > real.baseCab + 0.35;
+    real.post = bE && bD ? "BRAÇOS ERGUIDOS" : (bE || bD) ? "BRAÇO ERGUIDO" : real.baixa ? "CABEÇA BAIXA" : "NEUTRA";
+  }
+}
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+const LABIOS = [61,146,91,181,84,17,314,405,321,375,291,409,270,269,267,0,37,39,40,185];
+const OLHO_E = [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246], OLHO_D = [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466];
+const SOB_E = [70,63,105,66,107], SOB_D = [300,293,334,296,336];
+const POSE_CON = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[15,17],[15,19],[16,18],[16,20]];
+function desenharReal(t, info){
+  const g = geo();
+  ctx.save(); ctx.translate(W, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, g.ox, g.oy, g.dw, g.dh);
+  ctx.restore();
+  ctx.fillStyle = "rgba(5,10,18,.25)"; ctx.fillRect(0,0,W,H);
+  ctx.lineCap = "round"; ctx.lineJoin = "round";
+  // corpo
+  const P = real.pose?.landmarks?.[0];
+  if (P){
+    const Q = P.map(p => mp(p, g)), ok = i => (P[i].visibility ?? 1) > 0.5;
+    ctx.strokeStyle = "#1469be"; ctx.lineWidth = 5; ctx.beginPath();
+    for (const [a,b] of POSE_CON){ if (ok(a) && ok(b)){ ctx.moveTo(Q[a].x,Q[a].y); ctx.lineTo(Q[b].x,Q[b].y); } } ctx.stroke();
+    pontos([11,12,13,14,15,16].filter(ok).map(i => Q[i]), "#78d2f5", 8);
+  }
+  // rosto
+  const fl = real.face?.faceLandmarks?.[0];
+  if (fl){
+    const F2 = fl.map(p => mp(p, g));
+    pontos(F2.filter((_,i) => i % 2 === 0), "rgba(0,255,110,.5)", 1.6);
+    const verde = "rgba(0,255,110,.9)";
+    linha(FACE_OVAL.map(i => F2[i]), true, "rgba(0,255,110,.5)", 1.6);
+    linha(LABIOS.map(i => F2[i]), true, verde, 1.8); linha(OLHO_E.map(i => F2[i]), true, verde, 1.6); linha(OLHO_D.map(i => F2[i]), true, verde, 1.6);
+    linha(SOB_E.map(i => F2[i]), false, verde, 1.8); linha(SOB_D.map(i => F2[i]), false, verde, 1.8);
+    if (fl.length > 473) pontos([F2[468], F2[473]], "#ffffff", 4);
+  }
+  // mãos
+  ultimoFrame.dedoIndicador = null;
+  for (const L of real.hand?.landmarks || []){
+    const M = L.map(p => mp(p, g));
+    ctx.strokeStyle = "#3c78ff"; ctx.lineWidth = 3; ctx.beginPath();
+    for (const [a,b] of CONEX_MAO){ ctx.moveTo(M[a].x,M[a].y); ctx.lineTo(M[b].x,M[b].y); } ctx.stroke();
+    pontos(M, "#6aa0ff", 5.5); pontos([M[0]], "#ffffff", 4);
+    if (L === real.maoL && real.g === "ESCOLHER"){ ultimoFrame.dedoIndicador = M[8]; ctx.fillStyle = "#ffff00"; ctx.beginPath(); ctx.arc(M[8].x, M[8].y, 11, 0, Math.PI*2); ctx.fill(); }
+  }
+  // opções de escolha
+  if (info.conduta === "ABRIR OPÇÕES"){
+    rr(14, H-250, W-28, 192, 26, "rgba(255,255,255,.88)");
+    txt("APONTE UMA OPÇÃO", 36, H-214, 22, "#243247", 700);
+    const lb = (W-60)/4;
+    OPCOES.forEach((op,i) => { const x = 30 + i*lb, sel = info.escolha === op; rr(x, H-196, lb-14, 120, 18, sel ? "#4cc38a" : "#d2eeff"); txt(op, x + (lb-14)/2, H-124, 26, "#243247", 800, "center"); });
+    if (ultimoFrame.dedoIndicador){ const p = ultimoFrame.dedoIndicador; ctx.fillStyle = "#ffff00"; ctx.beginPath(); ctx.arc(p.x,p.y,12,0,Math.PI*2); ctx.fill(); }
+  }
+  if (["OFERECER AJUDA","OFERECER PAUSA"].includes(info.conduta)){
+    const aj = info.conduta === "OFERECER AJUDA";
+    rr(16,16,W-32,64,18, aj ? "#e5403f" : "#ee7d2b"); txt(aj ? "ATENÇÃO: AJUDA" : "ATENÇÃO: PAUSA", 40, 60, 32, "#fff", 800);
+  } else {
+    ctx.fillStyle = (t%1.2)<0.7 ? "#ff5a5f" : "rgba(255,90,95,.3)"; ctx.beginPath(); ctx.arc(34,34,9,0,Math.PI*2); ctx.fill();
+    ctx.font = `700 20px ui-monospace,Menlo,Consolas,monospace`; ctx.fillStyle = "#ffb3b5"; ctx.fillText("CÂMERA REAL · 478 + 21 + 33 pontos", 52, 41);
+  }
+  const chips = [`${fps} fps`, real.rosto ? "rosto detectado" : "procurando rosto", real.mao ? "mão detectada" : "sem mão", real.base ? "rosto calibrado" : "calibrando…", "sem gravar imagem"];
+  let x = 18; ctx.font = `700 19px ui-monospace,Menlo,Consolas,monospace`;
+  for (const c of chips){ const w = ctx.measureText(c).width + 26; rr(x, H-44, w, 30, 15, "rgba(8,14,24,.78)"); ctx.fillStyle = "#dfe9f7"; ctx.fillText(c, x+13, H-23); x += w + 8; }
+}
+if (location.hash === "#camera") setTimeout(ligarCamera, 300);
 
 // ---------------- demonstração automática ----------------
 const ROTEIRO = [[0,()=>{setEmo("calma"); gesto=null; marcarGesto();}],[3,()=>setEmo("alegria")],[7,()=>setGesto("ABERTA")],[13,()=>setEmo("calma")],[15,()=>setGesto("ESCOLHER")],[23,()=>setEmo("surpresa")],[26,()=>setEmo("calma")],[28,()=>setGesto("BRACO")],[33,()=>setEmo("tristeza")],[34,()=>setGesto("BAIXA")],[45,()=>{setGesto("BAIXA"); setEmo("calma");}],[47,()=>setGesto("V")],[53,()=>setGesto("POLEGAR")],[58,()=>setEmo("raiva")],[64,()=>setEmo("calma")],[66,()=>setGesto("DOIS")],[72,null]];

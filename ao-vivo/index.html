@@ -33,6 +33,10 @@ html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:14px/1
 .cam .aviso b{font-size:20px}
 .cam .aviso a,.cam .aviso button{font:700 15px var(--f);background:#1e6fd9;color:#fff;border:0;border-radius:10px;padding:10px 16px;text-decoration:none;cursor:pointer}
 .cam .aviso small{color:#9fb0c8;font-weight:500;max-width:560px}
+.auto.pb-on{background:#0f7a4a;border-color:#0f7a4a;color:#fff}
+.auto.pb-erro{background:#8a2a2a;border-color:#8a2a2a;color:#fff}
+.auto.vibra{animation:vibra .09s linear 6}
+@keyframes vibra{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
 .auto.cam-on{background:#0f7a4a;border-color:#0f7a4a;color:#fff}
 .auto[aria-pressed="true"]{background:var(--azul2);color:#fff;border-color:var(--azul2)}
 button:focus-visible{outline:2px solid var(--azul);outline-offset:2px}
@@ -93,6 +97,7 @@ canvas#chart{width:100%;flex:1;min-height:0;display:block}
     <h1>Solução da Equipe GTEeN</h1>
     <span class="pill">Aluno A01</span>
     <div class="sp"></div>
+    <button class="auto" id="btnPb">⌚ Conectar pulseira</button>
     <button class="auto" id="btnCam" aria-pressed="false">📷 Usar câmera real</button>
     <button class="auto" id="btnAuto" aria-pressed="false">▶ Demonstração automática</button>
     <span class="pill live"><i></i><span id="relogio">00:00</span></span>
@@ -427,8 +432,8 @@ function loop(now){
     OPCOES.forEach((op,i) => { const x = 30 + i*lb; if (p.x >= x && p.x <= x+lb-14 && p.y >= H-196 && p.y <= H-76) info.escolha = op; });
   }
   if (info.escolha !== ultEsc){ ultEsc = info.escolha; escDesde = t; escReg = false; }
-  else if (info.escolha && !escReg && t - escDesde > 1){ escReg = true; evento(`Escolheu: ${info.escolha}`, "#f5c043"); }
-  if (info.conduta !== condutaAtual){ condutaAtual = info.conduta; if (EV[info.conduta]) evento(...EV[info.conduta]); }
+  else if (info.escolha && !escReg && t - escDesde > 1){ escReg = true; evento(`Escolheu: ${info.escolha}`, "#f5c043"); alertarPulseira("ESCOLHA"); }
+  if (info.conduta !== condutaAtual){ condutaAtual = info.conduta; if (EV[info.conduta]) evento(...EV[info.conduta]); alertarPulseira(info.conduta); }
   if (gEf === "POLEGAR" && gAnterior !== "POLEGAR") evento("Sinalizou que está bem", "#3fd08a");
   gAnterior = gEf;
   infoAtual = info;
@@ -707,6 +712,77 @@ function desenharReal(t, info){
   for (const c of chips){ const w = ctx.measureText(c).width + 26; rr(x, H-44, w, 30, 15, "rgba(8,14,24,.78)"); ctx.fillStyle = "#dfe9f7"; ctx.fillText(c, x+13, H-23); x += w + 8; }
 }
 if (location.hash === "#camera") setTimeout(ligarCamera, 300);
+
+
+// ================= PULSEIRA (Bluetooth) =================
+const PB_SERVICO = "7a0b1000-5c1e-4b7a-9f3e-0d2a6c8e4f10", PB_CARAC = "7a0b1001-5c1e-4b7a-9f3e-0d2a6c8e4f10";
+const VIBRA = {"OFERECER AJUDA":3, "OFERECER PAUSA":2, "ACOLHER":2, "ESCOLHA":1};
+const ROT_VIBRA = {"OFERECER AJUDA":"pedido de ajuda", "OFERECER PAUSA":"pedido de pausa", "ACOLHER":"acolher", "ESCOLHA":"escolha confirmada"};
+const pb = {dev:null, carac:null, ult:{}, ultT:-99, ultVezes:0, tent:0, fila:Promise.resolve()};
+function estadoPb(e){
+  const b = $("btnPb"); b.classList.remove("pb-on","pb-erro");
+  if (e === "on"){ b.textContent = "⌚ Pulseira conectada"; b.classList.add("pb-on"); b.title = "Clique para testar a vibração"; }
+  else if (e === "busca"){ b.textContent = "⌚ Procurando…"; }
+  else if (e === "recon"){ b.textContent = "⌚ Reconectando…"; }
+  else if (e === "erro"){ b.textContent = "⌚ Pulseira: erro"; b.classList.add("pb-erro"); }
+  else { b.textContent = "⌚ Conectar pulseira"; b.title = ""; }
+}
+function avisoPb(titulo, texto, link){
+  aviso(`<b>${titulo}</b><small>${texto}</small>` + (link ? `<a href='${SITE_CAMERA}' target='_blank' rel='noopener'>⌚📷 Abrir com câmera e pulseira</a>` : "") + "<button id='avisoOk'>Continuar aqui</button>");
+  $("avisoOk").onclick = () => aviso(null);
+}
+async function conectarPb(){
+  if (pb.carac){ vibrar(1).then(ok => ok && evento("Teste da pulseira · vibrou 1×", "#4cc38a")); return; }
+  if (!navigator.bluetooth){
+    const safari = /^((?!chrome|android|edg).)*safari/i.test(navigator.userAgent);
+    return avisoPb("Este navegador não tem Bluetooth para páginas.", safari ? "O Safari não suporta. Use o Google Chrome ou o Microsoft Edge no computador." : "Use o Google Chrome ou o Microsoft Edge no computador.", dentroDeMoldura);
+  }
+  try {
+    estadoPb("busca");
+    const dev = await navigator.bluetooth.requestDevice({filters:[{namePrefix:"Pulseira"}], optionalServices:[PB_SERVICO]});
+    pb.dev = dev; dev.addEventListener("gattserverdisconnected", pbCaiu);
+    await abrirPb();
+    evento(`Pulseira conectada · ${dev.name || "Pulseira-VV"}`, "#4cc38a");
+    vibrar(1);
+  } catch(e){
+    console.warn(e);
+    if (e.name === "NotFoundError" && /cancel/i.test(e.message)){ estadoPb(pb.carac ? "on" : "off"); return; }
+    estadoPb("erro");
+    if (e.name === "SecurityError" || /permissions policy|disallowed|not allowed/i.test(e.message))
+      avisoPb("O aplicativo da apresentação não liberou o Bluetooth para este quadro.", "Clique abaixo para abrir a mesma tela numa aba ao lado. Lá, clique em ⌚ Conectar pulseira e escolha Pulseira-VV.", true);
+    else if (e.name === "NotFoundError")
+      avisoPb("Nenhuma pulseira encontrada.", "Confira se a pulseira está ligada no cabo USB, perto do computador, e se o Bluetooth do computador está ativado.", false);
+    else avisoPb("Não foi possível conectar à pulseira.", (e.message || e) + " — desligue e ligue a pulseira e tente de novo.", dentroDeMoldura);
+  }
+}
+async function abrirPb(){
+  const srv = await pb.dev.gatt.connect();
+  const svc = await srv.getPrimaryService(PB_SERVICO);
+  pb.carac = await svc.getCharacteristic(PB_CARAC); pb.tent = 0; estadoPb("on");
+}
+function pbCaiu(){
+  pb.carac = null;
+  if (pb.tent >= 15){ estadoPb("erro"); evento("Pulseira desconectada", "#e5484d"); return; }
+  pb.tent++; estadoPb("recon");
+  setTimeout(async () => { try { await abrirPb(); } catch(e){ pbCaiu(); } }, Math.min(10000, 1200*pb.tent));
+}
+function vibrar(vezes){
+  if (!pb.carac) return Promise.resolve(false);
+  const b = $("btnPb"); b.classList.remove("vibra"); void b.offsetWidth; b.classList.add("vibra");
+  const d = Uint8Array.of(Math.max(1, Math.min(9, vezes|0)));
+  pb.fila = pb.fila.then(() => (pb.carac.writeValueWithResponse ? pb.carac.writeValueWithResponse(d) : pb.carac.writeValue(d))).then(() => true, e => { console.warn(e); return false; });
+  return pb.fila;
+}
+function alertarPulseira(chave){
+  const vezes = VIBRA[chave] | 0;
+  if (!vezes || !pb.carac) return;
+  const t = tS();
+  if (t - (pb.ult[chave] ?? -99) < 6) return;
+  if (t - pb.ultT < 1.5 && vezes <= pb.ultVezes) return;
+  pb.ult[chave] = t; pb.ultT = t; pb.ultVezes = vezes;
+  vibrar(vezes).then(ok => { if (ok) evento(`⌚ Pulseira vibrou ${vezes}× · ${ROT_VIBRA[chave]}`, "#f5c043"); });
+}
+$("btnPb").onclick = conectarPb;
 
 // ---------------- demonstração automática ----------------
 const ROTEIRO = [[0,()=>{setEmo("calma"); gesto=null; marcarGesto();}],[3,()=>setEmo("alegria")],[7,()=>setGesto("ABERTA")],[13,()=>setEmo("calma")],[15,()=>setGesto("ESCOLHER")],[23,()=>setEmo("surpresa")],[26,()=>setEmo("calma")],[28,()=>setGesto("BRACO")],[33,()=>setEmo("tristeza")],[34,()=>setGesto("BAIXA")],[45,()=>{setGesto("BAIXA"); setEmo("calma");}],[47,()=>setGesto("V")],[53,()=>setGesto("POLEGAR")],[58,()=>setEmo("raiva")],[64,()=>setEmo("calma")],[66,()=>setGesto("DOIS")],[72,null]];

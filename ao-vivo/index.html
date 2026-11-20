@@ -711,7 +711,8 @@ function desenharReal(t, info){
   let x = 18; ctx.font = `700 19px ui-monospace,Menlo,Consolas,monospace`;
   for (const c of chips){ const w = ctx.measureText(c).width + 26; rr(x, H-44, w, 30, 15, "rgba(8,14,24,.78)"); ctx.fillStyle = "#dfe9f7"; ctx.fillText(c, x+13, H-23); x += w + 8; }
 }
-if (location.hash === "#camera") setTimeout(ligarCamera, 300);
+// começa direto com a câmera real (use #sim para abrir só a simulação)
+if (location.hash !== "#sim" && location.hash !== "#auto") setTimeout(ligarCamera, 300);
 
 
 // ================= PULSEIRA (Bluetooth) =================

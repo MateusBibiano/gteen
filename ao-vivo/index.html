@@ -99,10 +99,12 @@ canvas#chart{width:100%;flex:1;min-height:0;display:block}
     <h1>Solução da Equipe GTEeN</h1>
     <span class="pill">Aluno A01</span>
     <div class="sp"></div>
-    <span class="pill ponte" id="ponte">📡</span>
-    <button class="auto" id="btnPb">⌚ Conectar pulseira</button>
-    <button class="auto" id="btnCam" aria-pressed="false">📷 Usar câmera real</button>
-    <button class="auto" id="btnAuto" aria-pressed="false">▶ Demonstração automática</button>
+    <button class="auto" id="btnPip" title="Abre a tela numa janela que fica por cima da apresentação do Canva">🗗 Sobre o Canva</button>
+    <button class="auto" id="btnTam" hidden>⤢ Ampliar</button>
+    <span class="pill ponte" id="ponte" hidden>📡</span>
+    <button class="auto" id="btnPb">⌚ Pulseira</button>
+    <button class="auto" id="btnCam" aria-pressed="false">📷 Câmera real</button>
+    <button class="auto" id="btnAuto" aria-pressed="false">▶ Demo</button>
     <span class="pill live"><i></i><span id="relogio">00:00</span></span>
   </div>
   <div class="meio">
@@ -160,9 +162,10 @@ canvas#chart{width:100%;flex:1;min-height:0;display:block}
 <script>
 // ---------------- escala ----------------
 const palco = document.getElementById("palco");
-function ajustar(){ const s = Math.min(innerWidth/1280, innerHeight/720); palco.style.transform = `translate(-50%,-50%) scale(${s})`; }
+let pipWin = null;
+function ajustar(){ const w = pipWin || window; const s = Math.min(w.innerWidth/1280, w.innerHeight/720); palco.style.transform = `translate(-50%,-50%) scale(${s})`; }
 addEventListener("resize", ajustar); ajustar();
-const $ = id => document.getElementById(id);
+const $ = id => (pipWin ? pipWin.document : document).getElementById(id) || document.getElementById(id);
 const lerp = (a,b,t) => a + (b-a)*t;
 const clamp01 = v => Math.max(0, Math.min(1, v));
 
@@ -383,12 +386,15 @@ const serie = []; let acc = {n:0, eng:0, att:0, ten:0, emo:{}}, ultAmostra = 0;
 let fps = 30, fpsN = 0, fpsT = 0, ultEsc = "", escDesde = 0, escReg = false, gAnterior = null;
 
 let tAnt = performance.now();
+let rafId = 0, rafHost = window;
+function agendar(){ rafHost = pipWin || window; rafId = rafHost.requestAnimationFrame(loop); }
+function reagendar(){ try { rafHost.cancelAnimationFrame(rafId); } catch(e){} agendar(); }
 function loop(now){
-  requestAnimationFrame(loop);
-  if (!document.hidden) passo(now);
+  agendar();
+  if (!document.hidden || pipWin) passo(performance.now());   // relógio desta página (a janela flutuante tem outro)
 }
 function passo(now){
-  const dt = Math.min(0.1, (now - tAnt)/1000); tAnt = now;
+  const dt = Math.max(0, Math.min(0.1, (now - tAnt)/1000)); tAnt = now;
   const t = tS();
   fpsN++; if (t - fpsT > 1){ fps = Math.round(fpsN/(t-fpsT)); if (fps > 31) fps = 30; fpsT = t; fpsN = 0; }
   if (auto) passoAuto(t);
@@ -540,7 +546,7 @@ let det = null, ultimoVideoT = -1;
 function aviso(html){ const a = $("aviso"); if (!html){ a.hidden = true; a.innerHTML = ""; } else { a.hidden = false; a.innerHTML = html; } }
 const dentroDeMoldura = (() => { try { return window.self !== window.top; } catch(e){ return true; } })();
 function avisoCanva(){
-  aviso("<b>Para a câmera aparecer aqui no Canva</b><small>Antes de apresentar, abra no Google Chrome a página <b>mateusbibiano.github.io/gteen/ao-vivo</b>, permita a câmera e conecte a pulseira lá. Depois volte para o Canva e apresente: este slide mostra a câmera ao vivo sozinho.</small><button id='avisoOk'>Entendi</button>");
+  aviso("<b>O Canva não libera a câmera dentro do slide.</b><small>Antes de apresentar, abra no Google Chrome a página <b>mateusbibiano.github.io/gteen/ao-vivo</b>, permita a câmera, conecte a pulseira e clique em <b>🗗 Sobre o Canva</b>. A tela ao vivo fica numa janela por cima da apresentação, sem sair do Canva.</small><button id='avisoOk'>Entendi</button>");
   $("avisoOk").onclick = () => aviso(null);
 }
 let silencioso = false;
@@ -571,13 +577,13 @@ async function ligarCamera(){
     }
     real.base = null; real.amostras = []; real.baseCab = null; real.amostrasCab = [];
     REAL = true; aviso(null); iniciarLeitor(stream);
-    b.disabled = false; b.textContent = "■ Voltar à simulação"; b.classList.add("cam-on");
+    b.disabled = false; b.textContent = "■ Simulação"; b.classList.add("cam-on");
     $("bEmo").style.opacity = $("bGes").style.opacity = ".35"; $("bEmo").style.pointerEvents = $("bGes").style.pointerEvents = "none";
     evento("Câmera real ligada · calibrando rosto neutro", "#4cc38a");
   } catch(e){
     console.error(e);
     if (video.srcObject){ video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
-    b.disabled = false; b.textContent = "📷 Usar câmera real";
+    b.disabled = false; b.textContent = "📷 Câmera real";
     const negado = e.name === "NotAllowedError" || e.name === "SecurityError" || e.name === "Bloqueado";
     let msg;
     if (dentroDeMoldura){ ligarPonte(); if (!silencioso) avisoCanva(); return; }
@@ -592,7 +598,7 @@ async function ligarCamera(){
 function desligarCamera(){
   REAL = false;
   if (video.srcObject){ video.srcObject.getTracks().forEach(t => t.stop()); video.srcObject = null; }
-  const b = $("btnCam"); b.textContent = "📷 Usar câmera real"; b.classList.remove("cam-on");
+  const b = $("btnCam"); b.textContent = "📷 Câmera real"; b.classList.remove("cam-on");
   $("bEmo").style.opacity = $("bGes").style.opacity = ""; $("bEmo").style.pointerEvents = $("bGes").style.pointerEvents = "";
   real.g = null; real.baixa = false; real.pr = [0,1,0,0,0,0];
   evento("Voltou para a simulação", "#687b98");
@@ -752,8 +758,7 @@ function desenharReal(t, info){
   for (const c of chips){ const w = ctx.measureText(c).width + 26; rr(x, H-44, w, 30, 15, "rgba(8,14,24,.78)"); ctx.fillStyle = "#dfe9f7"; ctx.fillText(c, x+13, H-23); x += w + 8; }
 }
 // fora de molduras: liga a câmera e transmite; dentro do Canva: recebe a transmissão
-if (dentroDeMoldura) setTimeout(ligarPonte, 200);
-else if (location.hash !== "#sim" && location.hash !== "#auto") setTimeout(ligarCamera, 300);
+if (!dentroDeMoldura && location.hash !== "#sim" && location.hash !== "#auto") setTimeout(ligarCamera, 300);
 
 
 
@@ -874,14 +879,13 @@ function atualizarPonte(t){
   }
   if (!REAL && dentroDeMoldura){
     const b = $("btnPb");
-    const txt = t < remoto.ate ? (remoto.pb ? "⌚ Pulseira conectada" : "⌚ Pulseira desligada") : "⌚ Pulseira";
+    const txt = "⌚ Pulseira";
     if (b.textContent !== txt){ b.textContent = txt; b.classList.toggle("pb-on", remoto.pb && t < remoto.ate); }
   }
   if (t > remoto.ate && remoto.ate > 0 && !REAL){ remoto.ate = -1; evento("📡 Transmissão da câmera parou", "#687b98"); }
 }
 // ---- leitura de quadros que continua com a guia escondida ----
 async function iniciarLeitor(stream){
-  conectarBrokers(false);
   if (!("MediaStreamTrackProcessor" in window)) return;
   try {
     const track = stream.getVideoTracks()[0];
@@ -893,7 +897,7 @@ async function iniciarLeitor(stream){
         if (done || !quadro) break;
         try {
           processarReal(tS(), quadro);
-          if (document.hidden){
+          if (document.hidden && !pipWin){
             try { ultimoQuadroBmp && ultimoQuadroBmp.close && ultimoQuadroBmp.close(); ultimoQuadroBmp = await createImageBitmap(quadro); } catch(e){}
             passo(performance.now());
           } else if (ultimoQuadroBmp){ ultimoQuadroBmp.close && ultimoQuadroBmp.close(); ultimoQuadroBmp = null; }
@@ -903,6 +907,49 @@ async function iniciarLeitor(stream){
     })();
   } catch(e){ console.warn("leitor de quadros:", e); usaProcessador = false; }
 }
+
+
+// ================= JANELA SOBRE O CANVA (Picture-in-Picture) =================
+// O Canva bloqueia câmera, Bluetooth e internet dentro do slide. Esta janela fica por cima
+// de tudo, inclusive da apresentação do Canva em tela cheia, sem sair dela.
+let pipGrande = false;
+async function abrirJanela(){
+  if (pipWin){ pipWin.close(); return; }
+  if (!("documentPictureInPicture" in window)){
+    aviso("<b>Este navegador não abre a janela flutuante.</b><small>Use o Google Chrome ou o Microsoft Edge atualizados no computador.</small><button id='avisoOk'>Entendi</button>"); $("avisoOk").onclick = () => aviso(null); return;
+  }
+  const w = await documentPictureInPicture.requestWindow({width: 480, height: 270});
+  pipWin = w; pipGrande = false;
+  document.querySelectorAll("style, link[rel=stylesheet]").forEach(st => w.document.head.appendChild(st.cloneNode(true)));
+  w.document.title = "Solução da Equipe GTEeN · ao vivo";
+  w.document.body.style.cssText = "margin:0;background:#0a111d;overflow:hidden";
+  const fit = document.getElementById("fit");
+  w.document.body.appendChild(fit);
+  document.body.insertAdjacentHTML("beforeend", "<div id='pipAviso' style='position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:#e8eef8;font:600 18px Segoe UI,system-ui,sans-serif;text-align:center;padding:30px'><div style='font-size:42px'>🗗</div>A tela está na janela flutuante.<small style='color:#9fb0c8;font-weight:500;max-width:520px'>Agora volte para o Canva e apresente. A janela fica por cima da apresentação: arraste para o canto e use ⤢ Ampliar quando chegar a hora da demonstração. Não feche esta guia.</small></div>");
+  w.addEventListener("resize", ajustar);
+  w.addEventListener("keydown", e => { if (e.key === "Escape") alternarTamanho(false); });
+  w.addEventListener("pagehide", () => {
+    document.body.appendChild(fit);
+    document.getElementById("pipAviso")?.remove();
+    pipWin = null; ajustar(); reagendar();
+    $("btnPip").textContent = "🗗 Sobre o Canva"; $("btnTam").hidden = true;
+  });
+  $("btnPip").textContent = "✕ Fechar"; $("btnTam").hidden = false; $("btnTam").textContent = "⤢ Ampliar";
+  ajustar(); reagendar();
+}
+function alternarTamanho(forcar){
+  if (!pipWin) return;
+  pipGrande = forcar === undefined ? !pipGrande : forcar;
+  const sw = screen.availWidth, sh = screen.availHeight;
+  let w, h;
+  if (pipGrande){ w = Math.round(Math.min(sw, sh*16/9) * 0.96); h = Math.round(w*9/16); }
+  else { w = 480; h = 270; }
+  try { pipWin.resizeTo(w, h); } catch(e){ console.warn(e); }
+  $("btnTam").textContent = pipGrande ? "⤡ Reduzir" : "⤢ Ampliar";
+}
+$("btnPip").onclick = abrirJanela;
+$("btnTam").onclick = () => alternarTamanho();
+if (dentroDeMoldura) $("btnPip").hidden = true;
 
 // ================= PULSEIRA (Bluetooth) =================
 const PB_SERVICO = "7a0b1000-5c1e-4b7a-9f3e-0d2a6c8e4f10", PB_CARAC = "7a0b1001-5c1e-4b7a-9f3e-0d2a6c8e4f10";
@@ -915,14 +962,14 @@ function estadoPb(e){
   else if (e === "busca"){ b.textContent = "⌚ Procurando…"; }
   else if (e === "recon"){ b.textContent = "⌚ Reconectando…"; }
   else if (e === "erro"){ b.textContent = "⌚ Pulseira: erro"; b.classList.add("pb-erro"); }
-  else { b.textContent = "⌚ Conectar pulseira"; b.title = ""; }
+  else { b.textContent = "⌚ Pulseira"; b.title = ""; }
 }
 function avisoPb(titulo, texto, link){
   aviso(`<b>${titulo}</b><small>${texto}</small>` + (link ? `<a href='${SITE_CAMERA}' target='_blank' rel='noopener'>⌚📷 Abrir com câmera e pulseira</a>` : "") + "<button id='avisoOk'>Continuar aqui</button>");
   $("avisoOk").onclick = () => aviso(null);
 }
 async function conectarPb(){
-  if (dentroDeMoldura && !REAL) return avisoPb(tS() < remoto.ate && remoto.pb ? "A pulseira está conectada na página da câmera." : "A pulseira se conecta na página da câmera.", tS() < remoto.ate && remoto.pb ? "Ela vibra sozinha a cada pedido. Não precisa fazer nada aqui." : "Na guia do Chrome com mateusbibiano.github.io/gteen/ao-vivo, clique em ⌚ Conectar pulseira e escolha Pulseira-VV.", false);
+  if (dentroDeMoldura && !REAL) return avisoPb("O Canva não libera o Bluetooth dentro do slide.", "Abra mateusbibiano.github.io/gteen/ao-vivo no Chrome antes de apresentar, clique em ⌚ Pulseira e depois em 🗗 Sobre o Canva.", false);
   if (pb.carac){ vibrar(1).then(ok => ok && evento("Teste da pulseira · vibrou 1×", "#4cc38a")); return; }
   if (!navigator.bluetooth){
     const safari = /^((?!chrome|android|edg).)*safari/i.test(navigator.userAgent);
@@ -940,7 +987,7 @@ async function conectarPb(){
     if (e.name === "NotFoundError" && /cancel/i.test(e.message)){ estadoPb(pb.carac ? "on" : "off"); return; }
     estadoPb("erro");
     if (e.name === "SecurityError" || /permissions policy|disallowed|not allowed/i.test(e.message))
-      avisoPb("O Canva não libera o Bluetooth dentro do slide.", "Conecte a pulseira na página da câmera (mateusbibiano.github.io/gteen/ao-vivo), aberta no Chrome antes de apresentar. Ela vibra mesmo com o Canva em tela cheia.", false);
+      avisoPb("O Canva não libera o Bluetooth dentro do slide.", "Conecte a pulseira na página mateusbibiano.github.io/gteen/ao-vivo, aberta no Chrome antes de apresentar. Ela vibra mesmo com o Canva em tela cheia.", false);
     else if (e.name === "NotFoundError")
       avisoPb("Nenhuma pulseira encontrada.", "Confira se a pulseira está ligada no cabo USB, perto do computador, e se o Bluetooth do computador está ativado.", false);
     else avisoPb("Não foi possível conectar à pulseira.", (e.message || e) + " — desligue e ligue a pulseira e tente de novo.", dentroDeMoldura);
@@ -982,17 +1029,17 @@ function passoAuto(t){
   const tt = t - autoT0;
   while (autoI < ROTEIRO.length && tt >= ROTEIRO[autoI][0]){ const f = ROTEIRO[autoI][1]; if (f) f(); else { autoT0 = t; autoI = -1; } autoI++; }
 }
-function pararAuto(){ if (!auto) return; auto = false; $("btnAuto").setAttribute("aria-pressed","false"); $("btnAuto").textContent = "▶ Demonstração automática"; }
+function pararAuto(){ if (!auto) return; auto = false; $("btnAuto").setAttribute("aria-pressed","false"); $("btnAuto").textContent = "▶ Demo"; }
 $("btnAuto").onclick = () => {
   if (auto) return pararAuto();
-  auto = true; autoT0 = tS(); autoI = 0; $("btnAuto").setAttribute("aria-pressed","true"); $("btnAuto").textContent = "■ Parar demonstração";
+  auto = true; autoT0 = tS(); autoI = 0; $("btnAuto").setAttribute("aria-pressed","true"); $("btnAuto").textContent = "■ Parar demo";
 };
 if (location.hash === "#auto") $("btnAuto").click();
 
 // histórico inicial para o gráfico não começar vazio
 (() => { const t = 0; for (let i=120;i>0;i--){ const tt = -i*0.5; serie.push({t: tt, eng: 72 + Math.sin(i*0.21)*8 + (Math.random()-0.5)*6, att: 85 + Math.sin(i*0.13)*7 + (Math.random()-0.5)*6, ten: 12 + Math.sin(i*0.17)*5 + (Math.random()-0.5)*4, emo: i>70 && i<90 ? "alegria" : "calma"}); } })();
 evento("Início da sessão · Aluno A01", "#687b98");
-requestAnimationFrame(loop);
+agendar();
 </script>
 </body>
 </html>

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Apresentação · Equipe GTEeN</title>
+<link rel="icon" href="../solucao/logo_gteen.png">
+<style>
+:root{--bg:#0a111d;--card:#121c2c;--line:#22324a;--ink:#e8eef8;--sub:#9fb0c8;--azul:#1e6fd9;--verde:#0f7a4a;--f:"Segoe UI",system-ui,-apple-system,sans-serif}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:var(--f)}
+[hidden]{display:none!important}
+button{font:600 15px var(--f);border:0;border-radius:10px;padding:11px 16px;cursor:pointer;background:var(--azul);color:#fff}
+button.sec{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:default}
+
+/* ---------- montagem ---------- */
+#montar{max-width:1180px;margin:0 auto;padding:26px 22px 60px}
+.topo{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.topo img{width:46px;height:46px;border-radius:10px}
+.topo h1{font-size:22px;margin:0}
+.topo p{margin:2px 0 0;color:var(--sub);font-size:14px}
+#drop{border:2px dashed #3a5478;border-radius:18px;padding:40px 20px;text-align:center;background:#0e1828;cursor:pointer;transition:.15s}
+#drop.sobre{background:#132644;border-color:var(--azul)}
+#drop b{font-size:19px;display:block;margin-bottom:8px}
+#drop span{color:var(--sub);font-size:14px;line-height:1.5}
+#progresso{margin:14px 0;color:var(--sub);font-size:14px}
+.barra{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 12px}
+.barra .dica{color:var(--sub);font-size:14px;flex:1;min-width:260px}
+#lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.item{position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.item img,.item .vivo{display:block;width:100%;aspect-ratio:16/9;object-fit:contain;background:#000}
+.item .vivo{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:6px;background:linear-gradient(135deg,#0f2d52,#0a111d);font-weight:700;font-size:15px;text-align:center}
+.item .vivo i{font-style:normal;font-size:28px}
+.item .rod{display:flex;align-items:center;gap:6px;padding:7px 8px;font-size:13px;color:var(--sub)}
+.item .rod span{flex:1}
+.item .rod button{padding:5px 8px;font-size:12px;border-radius:7px}
+.item.ehvivo{border-color:#2f9e6a}
+.add{border:1px dashed #3a5478;background:transparent;color:#8fb3e8;border-radius:12px;min-height:60px;font-size:13px;padding:8px}
+
+/* ---------- apresentação ---------- */
+#palco{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#palco img.slide{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-drag:none}
+#palco iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:#0a111d}
+#palco iframe.oculto{visibility:hidden;pointer-events:none}
+#hud{position:fixed;right:14px;bottom:12px;display:flex;gap:8px;align-items:center;opacity:0;transition:opacity .25s;z-index:5}
+#palco:hover #hud,#hud:focus-within{opacity:1}
+#hud button{background:rgba(18,28,44,.85);border:1px solid var(--line);padding:8px 12px;font-size:13px}
+#hud span{font:600 13px ui-monospace,Menlo,Consolas,monospace;color:#cbd6e6;background:rgba(18,28,44,.85);padding:8px 10px;border-radius:9px}
+</style>
+</head>
+<body>
+
+<section id="montar">
+  <div class="topo">
+    <img src="../solucao/logo_gteen.png" alt="">
+    <div><h1>Apresentação com a tela ao vivo</h1><p>Os slides do Canva com a câmera real e a pulseira funcionando dentro da apresentação.</p></div>
+  </div>
+
+  <div id="drop" tabindex="0" role="button">
+    <b>Arraste aqui o PDF da apresentação</b>
+    <span>No Canva: <b style="display:inline;font-size:inherit">Compartilhar → Baixar → PDF padrão</b>. Também aceita imagens PNG ou JPG dos slides.<br>Ou clique para escolher o arquivo.</span>
+    <input id="arq" type="file" accept="application/pdf,image/*" multiple hidden>
+  </div>
+  <div id="progresso" aria-live="polite"></div>
+
+  <div id="area" hidden>
+    <div class="barra">
+      <div class="dica">Clique em <b>＋ Tela ao vivo</b> entre os slides para escolher onde ela entra. A apresentação fica salva neste navegador.</div>
+      <button class="sec" id="btnLimpar">Trocar o PDF</button>
+      <button id="btnApresentar">▶ Apresentar</button>
+    </div>
+    <div id="lista"></div>
+  </div>
+</section>
+
+<section id="palco" hidden>
+  <img class="slide" id="imgSlide" alt="">
+  <div id="hud">
+    <span id="contador">1 / 1</span>
+    <button id="hudAnt" title="Slide anterior">◀</button>
+    <button id="hudProx" title="Próximo slide">▶</button>
+    <button id="hudSair" title="Sair da apresentação">✕ Sair</button>
+  </div>
+</section>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const TELA = "../ao-vivo/";
+// ---------------- armazenamento (IndexedDB) ----------------
+const DBN = "gteen_apresentacao";
+function db(){ return new Promise((ok, erro) => { const r = indexedDB.open(DBN, 1); r.onupgradeneeded = () => r.result.createObjectStore("kv"); r.onsuccess = () => ok(r.result); r.onerror = () => erro(r.error); }); }
+async function salvar(k, v){ const d = await db(); return new Promise((ok, erro) => { const tx = d.transaction("kv","readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = ok; tx.onerror = () => erro(tx.error); }); }
+async function ler(k){ const d = await db(); return new Promise((ok, erro) => { const r = d.transaction("kv").objectStore("kv").get(k); r.onsuccess = () => ok(r.result); r.onerror = () => erro(r.error); }); }
+
+// ordem: lista de itens {t:"img", i:índice} ou {t:"vivo"}
+let imagens = [], urls = [], ordem = [];
+
+// ---------------- carregar PDF / imagens ----------------
+async function carregarArquivos(files){
+  files = [...files];
+  if (!files.length) return;
+  const prog = $("progresso");
+  const novas = [];
+  try {
+    for (const f of files){
+      if (f.type === "application/pdf" || /\.pdf$/i.test(f.name)){
+        prog.textContent = "Abrindo o PDF…";
+        const pdfjs = await import("./pdf.min.mjs");
+        pdfjs.GlobalWorkerOptions.workerSrc = new URL("./pdf.worker.min.mjs", import.meta.url).href;
+        const pdf = await pdfjs.getDocument({data: new Uint8Array(await f.arrayBuffer())}).promise;
+        for (let n = 1; n <= pdf.numPages; n++){
+          prog.textContent = `Preparando o slide ${n} de ${pdf.numPages}…`;
+          const pg = await pdf.getPage(n);
+          const v0 = pg.getViewport({scale:1});
+          const esc = Math.min(3, 1920 / v0.width);
+          const vp = pg.getViewport({scale: esc});
+          const c = document.createElement("canvas"); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+          await pg.render({canvasContext: c.getContext("2d"), viewport: vp}).promise;
+          novas.push(await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.92)));
+        }
+      } else if (f.type.startsWith("image/")){
+        novas.push(f);
+      }
+    }
+  } catch(e){ console.error(e); prog.textContent = "Não consegui abrir o arquivo: " + (e.message || e); return; }
+  if (!novas.length){ prog.textContent = "Nenhum slide encontrado. Envie o PDF exportado do Canva."; return; }
+  imagens = novas;
+  // posição padrão da tela ao vivo: no meio da apresentação
+  ordem = imagens.map((_, i) => ({t:"img", i}));
+  ordem.splice(Math.ceil(imagens.length / 2), 0, {t:"vivo"});
+  await salvar("imagens", imagens); await salvar("ordem", ordem);
+  prog.textContent = `${imagens.length} slides prontos.`;
+  montarLista();
+}
+function montarLista(){
+  urls.forEach(u => URL.revokeObjectURL(u));
+  urls = imagens.map(b => URL.createObjectURL(b));
+  $("area").hidden = false;
+  const L = $("lista"); L.innerHTML = "";
+  const botaoAdd = pos => { const b = document.createElement("button"); b.className = "add"; b.textContent = "＋ Tela ao vivo aqui"; b.onclick = () => { ordem.splice(pos, 0, {t:"vivo"}); salvar("ordem", ordem); montarLista(); }; return b; };
+  let num = 0;
+  ordem.forEach((it, k) => {
+    if (k === 0 || (ordem[k-1].t !== "vivo" && it.t !== "vivo")) L.appendChild(botaoAdd(k));
+    num++;
+    const d = document.createElement("div"); d.className = "item" + (it.t === "vivo" ? " ehvivo" : "");
+    if (it.t === "img") d.innerHTML = `<img src="${urls[it.i]}" alt="Slide ${it.i+1}"><div class="rod"><span>${num}. Slide ${it.i+1}</span></div>`;
+    else {
+      d.innerHTML = `<div class="vivo"><i>📷⌚</i>Tela ao vivo<small style="font-weight:500;color:#9fb0c8">câmera real + pulseira</small></div><div class="rod"><span>${num}. Tela ao vivo</span><button class="sec">Remover</button></div>`;
+      d.querySelector("button").onclick = () => { ordem.splice(k, 1); salvar("ordem", ordem); montarLista(); };
+    }
+    L.appendChild(d);
+  });
+  if (ordem.length && ordem[ordem.length-1].t !== "vivo") L.appendChild(botaoAdd(ordem.length));
+}
+const drop = $("drop");
+drop.onclick = () => $("arq").click();
+drop.onkeydown = e => { if (e.key === "Enter" || e.key === " ") $("arq").click(); };
+$("arq").onchange = e => carregarArquivos(e.target.files);
+["dragenter","dragover"].forEach(ev => addEventListener(ev, e => { e.preventDefault(); drop.classList.add("sobre"); }));
+["dragleave","drop"].forEach(ev => addEventListener(ev, e => { e.preventDefault(); if (ev === "drop" || e.target === drop) drop.classList.remove("sobre"); }));
+addEventListener("drop", e => carregarArquivos(e.dataTransfer.files));
+$("btnLimpar").onclick = () => $("arq").click();
+
+// ---------------- apresentar ----------------
+let atual = 0, frame = null;
+function criarTela(){
+  if (frame) return;
+  frame = document.createElement("iframe");
+  frame.src = TELA;
+  frame.allow = "camera; microphone; bluetooth; fullscreen";
+  frame.className = "oculto";
+  frame.title = "Tela ao vivo com câmera e pulseira";
+  frame.addEventListener("load", () => {
+    try { frame.contentWindow.addEventListener("keydown", teclas); } catch(e){}
+  });
+  $("palco").appendChild(frame);
+}
+function mostrar(n){
+  atual = Math.max(0, Math.min(ordem.length - 1, n));
+  const it = ordem[atual];
+  const img = $("imgSlide");
+  if (it.t === "img"){ img.hidden = false; img.src = urls[it.i]; frame && frame.classList.add("oculto"); $("palco").focus(); }
+  else { criarTela(); img.hidden = true; frame.classList.remove("oculto"); try { frame.focus(); } catch(e){} }
+  // prepara a tela ao vivo um slide antes, para a câmera e a IA já estarem prontas
+  if (ordem[atual+1]?.t === "vivo") criarTela();
+  $("contador").textContent = `${atual+1} / ${ordem.length}`;
+}
+function teclas(e){
+  if (["INPUT","TEXTAREA","SELECT"].includes(e.target?.tagName)) return;
+  if (["ArrowRight","PageDown","ArrowDown"].includes(e.key) || (e.key === " " && ordem[atual]?.t !== "vivo")){ e.preventDefault(); mostrar(atual + 1); }
+  else if (["ArrowLeft","PageUp","ArrowUp","Backspace"].includes(e.key)){ e.preventDefault(); mostrar(atual - 1); }
+  else if (e.key === "Home") mostrar(0);
+  else if (e.key === "End") mostrar(ordem.length - 1);
+  else if (e.key === "Escape" && !document.fullscreenElement) sair();
+}
+async function apresentar(){
+  if (!ordem.length) return;
+  $("montar").hidden = true; $("palco").hidden = false; $("palco").tabIndex = -1;
+  try { await document.documentElement.requestFullscreen(); } catch(e){}
+  mostrar(0);
+  if (ordem[0].t === "vivo" || ordem[1]?.t === "vivo") criarTela();
+}
+function sair(){
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  $("palco").hidden = true; $("montar").hidden = false;
+  if (frame){ frame.remove(); frame = null; }   // desliga a câmera ao sair
+}
+$("btnApresentar").onclick = apresentar;
+$("hudProx").onclick = () => mostrar(atual + 1);
+$("hudAnt").onclick = () => mostrar(atual - 1);
+$("hudSair").onclick = sair;
+$("imgSlide").onclick = () => mostrar(atual + 1);
+addEventListener("keydown", e => { if (!$("palco").hidden) teclas(e); });
+
+// ---------------- recuperar apresentação salva ----------------
+(async () => {
+  try {
+    const im = await ler("imagens"), od = await ler("ordem");
+    if (im && im.length){ imagens = im; ordem = od && od.length ? od : im.map((_, i) => ({t:"img", i})); $("progresso").textContent = `Apresentação salva: ${imagens.length} slides. Para trocar, arraste outro PDF.`; montarLista(); }
+  } catch(e){ console.warn(e); }
+})();
+</script>
+</body>
+</html>

@@ -543,8 +543,13 @@ async function ligarCamera(){
     if (!det){
       aviso("<b>Carregando a inteligência artificial…</b><small>Leva alguns segundos na primeira vez.</small>");
       b.textContent = "⏳ Carregando IA…";
-      const vision = await import(MP + "/vision_bundle.mjs");
-      const fs = await vision.FilesetResolver.forVisionTasks(MP + "/wasm");
+      let vision, wasm, local = false;
+      if (/github\.io$|^localhost$|^127\./.test(location.hostname)){
+        try { vision = await import(new URL("../solucao/mediapipe/vision_bundle.mjs", location.href).href); wasm = new URL("../solucao/mediapipe/wasm", location.href).href; local = true; } catch(e){}
+      }
+      if (!vision){ vision = await import(MP + "/vision_bundle.mjs"); wasm = MP + "/wasm"; }
+      if (local) for (const k of ["face","hand","pose"]) MODELO[k] = new URL(`../solucao/${k}_landmarker.task`, location.href).href;
+      const fs = await vision.FilesetResolver.forVisionTasks(wasm);
       const criar = async (C, url, extra) => { for (const d of ["GPU","CPU"]) { try { return await C.createFromOptions(fs, {baseOptions:{modelAssetPath:url, delegate:d}, runningMode:"VIDEO", ...extra}); } catch(e){ if (d === "CPU") throw e; } } };
       det = {face: await criar(vision.FaceLandmarker, MODELO.face, {numFaces:1, outputFaceBlendshapes:true}),
              hand: await criar(vision.HandLandmarker, MODELO.hand, {numHands:2}),
